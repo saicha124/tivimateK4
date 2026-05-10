@@ -17,11 +17,13 @@ import { AddPlaylistWizard } from "@/components/AddPlaylistWizard";
 import { ChannelList } from "@/components/ChannelList";
 import { EPGGrid } from "@/components/EPGGrid";
 import { GroupList } from "@/components/GroupList";
+import { MoviesView } from "@/components/MoviesView";
 import { MyListView } from "@/components/MyListView";
 import { PlaylistSwitcher } from "@/components/PlaylistSwitcher";
 import { ProgramInfo } from "@/components/ProgramInfo";
 import { RecordingsList } from "@/components/RecordingsList";
 import { SearchModal } from "@/components/SearchModal";
+import { ShowsView } from "@/components/ShowsView";
 import { Sidebar } from "@/components/Sidebar";
 import { Channel, EPGProgram, useIPTV } from "@/context/IPTVContext";
 import { useColors } from "@/hooks/useColors";
@@ -150,6 +152,16 @@ export default function HomeScreen() {
             /* My List view with subsections */
             <MyListView
               onPlayChannel={handlePlayChannel}
+              onPlayVOD={(url, name) => router.push({ pathname: "/player", params: { url, name } })}
+            />
+          ) : currentSection === "Movies" ? (
+            /* Movies VOD browser */
+            <MoviesView
+              onPlayVOD={(url, name) => router.push({ pathname: "/player", params: { url, name } })}
+            />
+          ) : currentSection === "Shows" ? (
+            /* Shows / Series browser */
+            <ShowsView
               onPlayVOD={(url, name) => router.push({ pathname: "/player", params: { url, name } })}
             />
           ) : viewMode === "epg" && currentSection === "TV" ? (
