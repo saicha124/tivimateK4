@@ -61,6 +61,19 @@ function progress(channel: Channel, stalkerEpg?: EPGProgram[]) {
   return Math.min(1, Math.max(0, elapsed / dur));
 }
 
+function fmtTime(ts: number) {
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function timeRemaining(endTime: number) {
+  const mins = Math.max(0, Math.round((endTime - Date.now()) / 60000));
+  if (mins <= 0) return "ending";
+  if (mins < 60) return `${mins}m left`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m left` : `${h}h left`;
+}
+
 export function ChannelList({
   onPlayChannel,
   onCatchUp,
@@ -314,6 +327,16 @@ export function ChannelList({
                     { backgroundColor: active ? colors.primary : `${colors.primary}80`, width: `${prog * 100}%` as any },
                   ]}
                 />
+              </View>
+              <View style={styles.endsRow}>
+                <Text style={[styles.endsIn, { color: active ? colors.primary : colors.mutedForeground }]}>
+                  {timeRemaining(now.endTime)}
+                </Text>
+                {active && (
+                  <Text style={[styles.endsAt, { color: colors.mutedForeground }]}>
+                    ends {fmtTime(now.endTime)}
+                  </Text>
+                )}
               </View>
             </>
           ) : (
@@ -816,6 +839,20 @@ const styles = StyleSheet.create({
   progressFill: {
     height: 3,
     borderRadius: 2,
+  },
+  endsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 1,
+  },
+  endsIn: {
+    fontSize: 10,
+    fontFamily: "Inter_500Medium",
+  },
+  endsAt: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
   },
   playBtn: {
     width: 30,
