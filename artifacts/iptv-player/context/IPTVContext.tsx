@@ -136,6 +136,7 @@ export interface WatchHistoryItem {
   channelLogo?: string;
   channelUrl: string;
   watchedAt: number;
+  type?: "channel" | "movie" | "show";
 }
 
 interface IPTVContextValue {

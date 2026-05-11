@@ -31,9 +31,10 @@ function formatDate(ts: number) {
   return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 }
 
-type SubSection = "tv" | "reminders" | "movies" | "shows";
+type SubSection = "recent" | "tv" | "reminders" | "movies" | "shows";
 
 const SUB_SECTIONS: { key: SubSection; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+  { key: "recent", label: "Recently watched", icon: "clock" },
   { key: "tv", label: "My TV programs", icon: "tv" },
   { key: "reminders", label: "My reminders", icon: "bell" },
   { key: "movies", label: "My movies", icon: "film" },
@@ -190,6 +191,72 @@ function ReminderRow({
   );
 }
 
+function RecentRow({
+  item,
+  onPlay,
+}: {
+  item: WatchHistoryItem;
+  onPlay: (url: string, name: string) => void;
+}) {
+  const colors = useColors();
+
+  const typeIcon: keyof typeof Feather.glyphMap =
+    item.type === "movie" ? "film" : item.type === "show" ? "grid" : "tv";
+  const typeLabel =
+    item.type === "movie" ? "Movie" : item.type === "show" ? "Series" : item.channelGroup;
+
+  return (
+    <TouchableOpacity
+      onPress={() => {
+        Haptics.selectionAsync();
+        onPlay(item.channelUrl, item.channelName);
+      }}
+      style={[rowStyles.row, { borderBottomColor: colors.border }]}
+      activeOpacity={0.8}
+    >
+      <View style={[rowStyles.logo, { backgroundColor: colors.secondary }]}>
+        {item.channelLogo ? (
+          <Image source={{ uri: item.channelLogo }} style={rowStyles.logoImg} contentFit="contain" />
+        ) : (
+          <Feather name={typeIcon} size={18} color={colors.mutedForeground} />
+        )}
+      </View>
+      <View style={rowStyles.info}>
+        <Text style={[rowStyles.name, { color: colors.foreground }]} numberOfLines={1}>
+          {item.channelName}
+        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+          <View style={[recentStyles.typePill, { backgroundColor: colors.secondary }]}>
+            <Feather name={typeIcon} size={9} color={colors.mutedForeground} />
+            <Text style={[recentStyles.typePillText, { color: colors.mutedForeground }]}>{typeLabel}</Text>
+          </View>
+          <Text style={[rowStyles.sub, { color: colors.mutedForeground }]}>
+            {formatDate(item.watchedAt)} · {formatTime(item.watchedAt)}
+          </Text>
+        </View>
+      </View>
+      <View style={[rowStyles.playBtn, { backgroundColor: colors.primary }]}>
+        <Feather name="play" size={14} color="#fff" />
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const recentStyles = StyleSheet.create({
+  typePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  typePillText: {
+    fontSize: 9,
+    fontFamily: "Inter_500Medium",
+  },
+});
+
 function HistoryRow({
   item,
   onPlay,
@@ -313,7 +380,7 @@ export function MyListView({ onPlayChannel, onPlayVOD }: MyListViewProps) {
     clearWatchHistory,
   } = useIPTV();
 
-  const [activeSubSection, setActiveSubSection] = useState<SubSection>("tv");
+  const [activeSubSection, setActiveSubSection] = useState<SubSection>("recent");
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -340,7 +407,48 @@ export function MyListView({ onPlayChannel, onPlayVOD }: MyListViewProps) {
     return d.toDateString() !== new Date().toDateString();
   });
 
+  const recentlyWatched = watchHistory.slice(0, 20);
+
   const renderContent = () => {
+    if (activeSubSection === "recent") {
+      if (recentlyWatched.length === 0) {
+        return (
+          <View style={styles.empty}>
+            <Feather name="clock" size={40} color={colors.mutedForeground} style={{ marginBottom: 12 }} />
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Nothing watched yet</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              Channels, movies and shows you play will appear here
+            </Text>
+          </View>
+        );
+      }
+
+      return (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bottomPad + 16 }}>
+          <View style={[sectionStyles.header, { borderBottomColor: colors.border }]}>
+            <Text style={[sectionStyles.label, { color: colors.mutedForeground }]}>RECENTLY WATCHED</Text>
+            <TouchableOpacity onPress={() => {
+              Haptics.selectionAsync();
+              if (Platform.OS === "web") { clearWatchHistory(); return; }
+              Alert.alert("Clear History", "Remove all recently watched?", [
+                { text: "Cancel", style: "cancel" },
+                { text: "Clear", style: "destructive", onPress: clearWatchHistory },
+              ]);
+            }}>
+              <Text style={[{ color: colors.destructive, fontSize: 12, fontFamily: "Inter_500Medium" }]}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+          {recentlyWatched.map((item) => (
+            <RecentRow
+              key={`${item.channelId}-${item.watchedAt}`}
+              item={item}
+              onPlay={onPlayVOD}
+            />
+          ))}
+        </ScrollView>
+      );
+    }
+
     if (activeSubSection === "tv") {
       if (favoriteChannels.length === 0 && watchHistory.length === 0) {
         return (
@@ -528,6 +636,7 @@ export function MyListView({ onPlayChannel, onPlayVOD }: MyListViewProps) {
         {SUB_SECTIONS.map((sub) => {
           const active = activeSubSection === sub.key;
           const badgeCount =
+            sub.key === "recent" ? recentlyWatched.length :
             sub.key === "reminders" ? programReminders.length :
             sub.key === "tv" ? favoriteChannels.length :
             sub.key === "movies" ? favoriteMovies.length :

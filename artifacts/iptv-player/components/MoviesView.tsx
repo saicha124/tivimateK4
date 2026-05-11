@@ -230,7 +230,7 @@ function PosterCard({
 export function MoviesView({ onPlayVOD }: MoviesViewProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { activePlaylist, favorites, toggleFavorite, watchHistory } = useIPTV();
+  const { activePlaylist, favorites, toggleFavorite, watchHistory, addToWatchHistory } = useIPTV();
 
   const movies = activePlaylist?.movies ?? [];
 
@@ -351,7 +351,17 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
           <MovieDetailPane
             item={selectedMovie}
             isFav={favorites.includes(selectedMovie.id)}
-            onPlay={() => onPlayVOD(selectedMovie.url, selectedMovie.name)}
+            onPlay={() => {
+              addToWatchHistory({
+                channelId: selectedMovie.id,
+                channelName: selectedMovie.name,
+                channelGroup: selectedMovie.category,
+                channelLogo: selectedMovie.logo,
+                channelUrl: selectedMovie.url,
+                type: "movie",
+              });
+              onPlayVOD(selectedMovie.url, selectedMovie.name);
+            }}
             onToggleFav={() => toggleFavorite(selectedMovie.id)}
           />
         )}

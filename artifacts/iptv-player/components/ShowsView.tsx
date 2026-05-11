@@ -411,7 +411,7 @@ function SeriesCard({
 export function ShowsView({ onPlayVOD }: ShowsViewProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { activePlaylist, favorites, toggleFavorite, watchHistory } = useIPTV();
+  const { activePlaylist, favorites, toggleFavorite, watchHistory, addToWatchHistory } = useIPTV();
 
   const shows = activePlaylist?.shows ?? [];
   const isStalker = activePlaylist?.type === "StalkerPortal";
@@ -537,7 +537,17 @@ export function ShowsView({ onPlayVOD }: ShowsViewProps) {
               <StalkerSeriesDetail
                 item={currentStalkerItem}
                 isFav={favorites.includes(currentStalkerItem.id)}
-                onPlay={() => onPlayVOD(currentStalkerItem.url, currentStalkerItem.name)}
+                onPlay={() => {
+                  addToWatchHistory({
+                    channelId: currentStalkerItem.id,
+                    channelName: currentStalkerItem.name,
+                    channelGroup: currentStalkerItem.category,
+                    channelLogo: currentStalkerItem.logo,
+                    channelUrl: currentStalkerItem.url,
+                    type: "show",
+                  });
+                  onPlayVOD(currentStalkerItem.url, currentStalkerItem.name);
+                }}
                 onToggleFav={() => toggleFavorite(currentStalkerItem.id)}
               />
             )}
@@ -606,7 +616,17 @@ export function ShowsView({ onPlayVOD }: ShowsViewProps) {
               <M3USeriesDetail
                 series={currentSeries}
                 isFav={currentSeries.episodes[0] ? favorites.includes(currentSeries.episodes[0].id) : false}
-                onPlayEp={(ep) => onPlayVOD(ep.url, ep.name)}
+                onPlayEp={(ep) => {
+                  addToWatchHistory({
+                    channelId: ep.id,
+                    channelName: ep.name,
+                    channelGroup: ep.category,
+                    channelLogo: ep.logo,
+                    channelUrl: ep.url,
+                    type: "show",
+                  });
+                  onPlayVOD(ep.url, ep.name);
+                }}
                 onToggleFav={() => {
                   if (currentSeries.episodes[0]) toggleFavorite(currentSeries.episodes[0].id);
                 }}

@@ -34,7 +34,7 @@ import {
 } from "@/utils/mockEPG";
 
 const SLOT_WIDTH = 120;
-const CHANNEL_COL_WIDTH = 72;
+const CHANNEL_COL_WIDTH = 100;
 const ROW_HEIGHT = 56;
 const HEADER_HEIGHT = 36;
 const DAY_BAR_HEIGHT = 48;
@@ -273,8 +273,9 @@ export function EPGGrid({ onPlayChannel, onCatchUp, onGoToRecordings }: EPGGridP
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const renderRow = useCallback(({ item: channel }: { item: Channel }) => {
+  const renderRow = useCallback(({ item: channel, index }: { item: Channel; index: number }) => {
     const isActive = selectedChannel?.id === channel.id;
+    const chanNum = /^\d+$/.test(channel.id) ? channel.id : String(index + 1);
     const dayPrograms = (channel.epg ?? []).filter(
       (p) => p.endTime > refTime && p.startTime < dayEnd
     );
@@ -296,19 +297,24 @@ export function EPGGrid({ onPlayChannel, onCatchUp, onGoToRecordings }: EPGGridP
           }}
           activeOpacity={0.7}
         >
-          <View style={[styles.logoContainer, { backgroundColor: colors.secondary }]}>
-            {channel.logo ? (
-              <Image source={{ uri: channel.logo }} style={styles.logo} contentFit="contain" />
-            ) : (
-              <Feather name="tv" size={13} color={colors.mutedForeground} />
-            )}
-          </View>
-          <Text
-            style={[styles.channelName, { color: isActive ? colors.primary : colors.mutedForeground }]}
-            numberOfLines={2}
-          >
-            {channel.name}
+          <Text style={[styles.channelNum, { color: isActive ? colors.primary : colors.mutedForeground }]}>
+            {chanNum}
           </Text>
+          <View style={styles.channelCellRight}>
+            <View style={[styles.logoContainer, { backgroundColor: colors.secondary }]}>
+              {channel.logo ? (
+                <Image source={{ uri: channel.logo }} style={styles.logo} contentFit="contain" />
+              ) : (
+                <Feather name="tv" size={13} color={colors.mutedForeground} />
+              )}
+            </View>
+            <Text
+              style={[styles.channelName, { color: isActive ? colors.primary : colors.mutedForeground }]}
+              numberOfLines={2}
+            >
+              {channel.name}
+            </Text>
+          </View>
         </TouchableOpacity>
 
         <ScrollView
@@ -615,13 +621,26 @@ const styles = StyleSheet.create({
   },
   channelCell: {
     width: CHANNEL_COL_WIDTH,
-    flexDirection: "column",
-    justifyContent: "center",
+    flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
+    paddingVertical: 4,
+    paddingLeft: 4,
+    paddingRight: 3,
+    gap: 4,
     borderRightWidth: 1,
+  },
+  channelNum: {
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    width: 20,
+    textAlign: "right",
+    flexShrink: 0,
+  },
+  channelCellRight: {
+    flex: 1,
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 2,
   },
   logoContainer: {
     width: 36,
@@ -633,10 +652,10 @@ const styles = StyleSheet.create({
   },
   logo: { width: 36, height: 24 },
   channelName: {
-    fontSize: 9,
+    fontSize: 8,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
-    lineHeight: 12,
+    lineHeight: 11,
   },
 
   programsScroll: {
