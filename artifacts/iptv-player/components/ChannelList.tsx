@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CatchUpSheet } from "@/components/CatchUpSheet";
 import { ChannelContextMenu } from "@/components/ChannelContextMenu";
 import { Channel, EPGProgram, useIPTV } from "@/context/IPTVContext";
 import { useColors } from "@/hooks/useColors";
@@ -102,6 +103,7 @@ export function ChannelList({
   } = useIPTV();
 
   const [contextChannel, setContextChannel] = useState<Channel | null>(null);
+  const [catchUpChannel, setCatchUpChannel] = useState<Channel | null>(null);
   const [viewLayout, setViewLayout] = useState<ViewLayout>("list");
   const [containerWidth, setContainerWidth] = useState(0);
   const [filterQuery, setFilterQuery] = useState("");
@@ -220,6 +222,8 @@ export function ChannelList({
     const prog = progress(channel, stalkerEpg);
     const isFav = favorites.includes(channel.id);
     const isBlocked = blockedChannels.includes(channel.id);
+    const epg = stalkerEpg?.length ? stalkerEpg : (channel.epg ?? []);
+    const hasCatchUp = epg.some((p) => p.startTime < Date.now());
 
     if (manageFavoritesMode) {
       return (
@@ -352,6 +356,19 @@ export function ChannelList({
             activeOpacity={0.85}
           >
             <Feather name="play" size={13} color="#fff" />
+          </TouchableOpacity>
+        )}
+        {active && hasCatchUp && (
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setCatchUpChannel(channel);
+            }}
+            style={[styles.catchUpBtn, { backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}40` }]}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            activeOpacity={0.75}
+          >
+            <Feather name="rotate-ccw" size={12} color={colors.primary} />
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -640,6 +657,16 @@ export function ChannelList({
         onPlay={onPlayChannel}
         onCatchUp={onCatchUp}
       />
+
+      <CatchUpSheet
+        channel={catchUpChannel}
+        visible={!!catchUpChannel}
+        onClose={() => setCatchUpChannel(null)}
+        onPlay={(ch, program) => {
+          setCatchUpChannel(null);
+          onCatchUp(ch, program);
+        }}
+      />
     </View>
   );
 }
@@ -860,6 +887,14 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
+  },
+  catchUpBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
   },
   favBtn: {
     padding: 4,
