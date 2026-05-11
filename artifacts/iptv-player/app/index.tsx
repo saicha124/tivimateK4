@@ -18,11 +18,11 @@ import { AddPlaylistWizard } from "@/components/AddPlaylistWizard";
 import { ChannelList } from "@/components/ChannelList";
 import { EPGGrid } from "@/components/EPGGrid";
 import { GroupList } from "@/components/GroupList";
+import { MiniPlayer } from "@/components/MiniPlayer";
 import { MoviesView } from "@/components/MoviesView";
 import { MyListView } from "@/components/MyListView";
 import { PlaylistSwitcher } from "@/components/PlaylistSwitcher";
 import { NowNextBar } from "@/components/NowNextBar";
-import { ProgramInfo } from "@/components/ProgramInfo";
 import { RecordingsList } from "@/components/RecordingsList";
 import { SearchView } from "@/components/SearchView";
 import { ShowsView } from "@/components/ShowsView";
@@ -228,7 +228,9 @@ export default function HomeScreen() {
             <View style={styles.listContainer}>
               <GroupList onManageFavorites={() => setManageFavoritesMode(true)} />
               <View style={styles.channelArea}>
-                {selectedChannel && !manageFavoritesMode && <ProgramInfo onPlay={handlePlayChannel} />}
+                {selectedChannel && !manageFavoritesMode && (
+                  <MiniPlayer onFullscreen={handlePlayChannel} />
+                )}
                 <ChannelList
                   onPlayChannel={handlePlayChannel}
                   onCatchUp={handleCatchUp}
