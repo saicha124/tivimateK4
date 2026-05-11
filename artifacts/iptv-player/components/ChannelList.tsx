@@ -95,12 +95,12 @@ export function ChannelList({
   const [sortOrder, setSortOrder] = useState<SortOrder>("default");
 
   useEffect(() => {
-    AsyncStorage.getItem(LAYOUT_STORAGE_KEY).then((v) => {
-      if (v === "grid" || v === "list") setViewLayout(v);
-    });
-    AsyncStorage.getItem(SORT_STORAGE_KEY).then((v) => {
-      if (v === "default" || v === "name-asc" || v === "name-desc") setSortOrder(v);
-    });
+    AsyncStorage.getItem(LAYOUT_STORAGE_KEY)
+      .then((v) => { if (v === "grid" || v === "list") setViewLayout(v); })
+      .catch(() => {});
+    AsyncStorage.getItem(SORT_STORAGE_KEY)
+      .then((v) => { if (v === "default" || v === "name-asc" || v === "name-desc") setSortOrder(v); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

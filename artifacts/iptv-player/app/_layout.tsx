@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
+import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -20,6 +21,25 @@ import { ParentalProvider } from "@/context/ParentalContext";
 import { PiPProvider } from "@/context/PiPContext";
 
 SplashScreen.preventAutoHideAsync();
+
+if (Platform.OS === "web" && typeof window !== "undefined") {
+  window.addEventListener("unhandledrejection", (event) => {
+    const msg: string =
+      (event.reason instanceof Error ? event.reason.message : null) ??
+      String(event.reason?.message ?? event.reason ?? "");
+    const isNetworkNoise =
+      msg.includes("network error") ||
+      msg.includes("Network error") ||
+      msg.includes("Failed to fetch") ||
+      msg.includes("NetworkError") ||
+      msg.includes("Load failed") ||
+      msg.includes("The network connection was lost");
+    if (isNetworkNoise) {
+      console.warn("[background network error suppressed]", msg);
+      event.preventDefault();
+    }
+  });
+}
 
 const queryClient = new QueryClient();
 
