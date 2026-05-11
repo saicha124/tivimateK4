@@ -271,6 +271,19 @@ export function EPGGrid({ onPlayChannel, onCatchUp, onGoToRecordings }: EPGGridP
     setSelectedDayOffset(offset);
   }, []);
 
+  const handleJumpToNow = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (selectedDayOffset !== 0) {
+      setSelectedDayOffset(0);
+      // scroll will be reset by the day-change useEffect
+      return;
+    }
+    const x = clamp(nowOffset - SLOT_WIDTH, 0, totalWidth);
+    scrollXRef.current = x;
+    headerScrollRef.current?.scrollTo({ x, animated: true });
+    rowScrollRefs.current.forEach((ref) => ref?.scrollTo({ x, animated: true }));
+  }, [selectedDayOffset, nowOffset, totalWidth]);
+
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const renderRow = useCallback(({ item: channel, index }: { item: Channel; index: number }) => {
@@ -456,6 +469,24 @@ export function EPGGrid({ onPlayChannel, onCatchUp, onGoToRecordings }: EPGGridP
             </View>
           )}
         </ScrollView>
+
+        {/* Jump to Now button — fixed to the right of the day bar */}
+        <TouchableOpacity
+          onPress={handleJumpToNow}
+          style={[
+            styles.jumpNowBtn,
+            {
+              backgroundColor: selectedDayOffset === 0 ? `${colors.primary}20` : colors.primary,
+              borderColor: colors.primary,
+            },
+          ]}
+          activeOpacity={0.75}
+        >
+          <View style={[styles.jumpNowDot, { backgroundColor: selectedDayOffset === 0 ? colors.primary : "#fff" }]} />
+          <Text style={[styles.jumpNowText, { color: selectedDayOffset === 0 ? colors.primary : "#fff" }]}>
+            Live
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* ── Time ruler header ── */}
@@ -581,6 +612,26 @@ const styles = StyleSheet.create({
   epgLoadingText: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
+  },
+  jumpNowBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 8,
+    flexShrink: 0,
+  },
+  jumpNowDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  jumpNowText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
   },
 
   headerRow: {
