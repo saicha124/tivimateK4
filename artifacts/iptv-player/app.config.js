@@ -1,0 +1,54 @@
+const replitDomain = process.env.REPLIT_DEV_DOMAIN
+  ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+  : "https://replit.com/";
+
+module.exports = {
+  expo: {
+    name: "IPTV Player",
+    slug: "iptv-player",
+    version: "1.0.0",
+    orientation: "portrait",
+    icon: "./assets/images/icon.png",
+    scheme: "iptv-player",
+    userInterfaceStyle: "dark",
+    newArchEnabled: true,
+    splash: {
+      image: "./assets/images/icon.png",
+      resizeMode: "contain",
+      backgroundColor: "#111111",
+    },
+    ios: {
+      supportsTablet: true,
+    },
+    android: {
+      package: "com.iptv.player",
+      adaptiveIcon: {
+        foregroundImage: "./assets/images/icon.png",
+        backgroundColor: "#111111",
+      },
+    },
+    web: {
+      favicon: "./assets/images/icon.png",
+    },
+    plugins: [
+      [
+        "expo-router",
+        {
+          origin: replitDomain,
+        },
+      ],
+      "expo-font",
+      "expo-web-browser",
+      "expo-av",
+    ],
+    extra: {
+      router: {
+        origin: replitDomain,
+      },
+    },
+    experiments: {
+      typedRoutes: true,
+      reactCompiler: true,
+    },
+  },
+};
