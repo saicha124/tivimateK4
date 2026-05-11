@@ -2,13 +2,14 @@ import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import React, { useMemo, useState } from "react";
+import React, { useRef, useMemo, useState } from "react";
 import {
   FlatList,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -423,6 +424,8 @@ export function ShowsView({ onPlayVOD }: ShowsViewProps) {
   const [selectedCat, setSelectedCat] = useState("All shows");
   // For Stalker: selected VODItem id. For M3U: selected SeriesGroup name.
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<TextInput>(null);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -439,17 +442,33 @@ export function ShowsView({ onPlayVOD }: ShowsViewProps) {
 
   // Stalker: work directly with VODItems
   const stalkerItems = filteredShows;
+
+  // Search filtering (searches across ALL shows regardless of category)
+  const searchActive = query.trim().length > 0;
+  const displayStalkerItems = useMemo(() => {
+    if (!searchActive) return stalkerItems;
+    const q = query.trim().toLowerCase();
+    return shows.filter((s) => s.name.toLowerCase().includes(q));
+  }, [searchActive, query, stalkerItems, shows]);
+
   const currentStalkerItem = useMemo(() => {
     if (!isStalker) return null;
-    return stalkerItems.find((s) => s.id === selectedId) ?? stalkerItems[0] ?? null;
-  }, [isStalker, stalkerItems, selectedId]);
+    return displayStalkerItems.find((s) => s.id === selectedId) ?? displayStalkerItems[0] ?? null;
+  }, [isStalker, displayStalkerItems, selectedId]);
 
   // M3U: group by name pattern
   const seriesList = useMemo(() => (isStalker ? [] : groupIntoSeries(filteredShows)), [isStalker, filteredShows]);
+
+  const displaySeriesList = useMemo(() => {
+    if (!searchActive) return seriesList;
+    const q = query.trim().toLowerCase();
+    return seriesList.filter((s) => s.name.toLowerCase().includes(q));
+  }, [searchActive, query, seriesList]);
+
   const currentSeries = useMemo(() => {
     if (isStalker) return null;
-    return seriesList.find((s) => s.name === selectedId) ?? seriesList[0] ?? null;
-  }, [isStalker, seriesList, selectedId]);
+    return displaySeriesList.find((s) => s.name === selectedId) ?? displaySeriesList[0] ?? null;
+  }, [isStalker, displaySeriesList, selectedId]);
 
   if (shows.length === 0) {
     return (
@@ -522,29 +541,64 @@ export function ShowsView({ onPlayVOD }: ShowsViewProps) {
                 onToggleFav={() => toggleFavorite(currentStalkerItem.id)}
               />
             )}
-            {stalkerItems.length > 0 && (
-              <View style={[styles.seriesStrip, { borderTopColor: colors.border }]}>
-                <Text style={[styles.stripHeader, { color: colors.mutedForeground }]}>
-                  {stalkerItems.length} {stalkerItems.length === 1 ? "SERIES" : "SERIES"}
-                </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingHorizontal: 12, gap: 8, paddingBottom: bottomPad + 8 }}
-                >
-                  {stalkerItems.map((item) => (
-                    <SeriesCard
-                      key={item.id}
-                      name={item.name}
-                      logo={item.logo}
-                      badge={item.year ? item.year.slice(0, 4) : undefined}
-                      selected={currentStalkerItem?.id === item.id}
-                      onPress={() => { Haptics.selectionAsync(); setSelectedId(item.id); }}
-                    />
-                  ))}
-                </ScrollView>
+            <View style={[styles.seriesStrip, { borderTopColor: colors.border }]}>
+              {/* Search bar */}
+              <View style={[styles.searchBar, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                <Feather name="search" size={14} color={colors.mutedForeground} />
+                <TextInput
+                  ref={inputRef}
+                  style={[styles.searchInput, { color: colors.foreground }]}
+                  placeholder="Search shows…"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={query}
+                  onChangeText={setQuery}
+                  returnKeyType="search"
+                  clearButtonMode="never"
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                />
+                {query.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => { setQuery(""); inputRef.current?.blur(); }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Feather name="x" size={14} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
               </View>
-            )}
+
+              {displayStalkerItems.length === 0 ? (
+                <View style={styles.stripEmpty}>
+                  <Text style={[styles.stripEmptyText, { color: colors.mutedForeground }]}>
+                    No results for "{query}"
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={[styles.stripHeader, { color: colors.mutedForeground }]}>
+                    {searchActive
+                      ? `${displayStalkerItems.length} ${displayStalkerItems.length === 1 ? "RESULT" : "RESULTS"}`
+                      : `${displayStalkerItems.length} SERIES`}
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: 12, gap: 8, paddingBottom: bottomPad + 8 }}
+                  >
+                    {displayStalkerItems.map((item) => (
+                      <SeriesCard
+                        key={item.id}
+                        name={item.name}
+                        logo={item.logo}
+                        badge={item.year ? item.year.slice(0, 4) : undefined}
+                        selected={currentStalkerItem?.id === item.id}
+                        onPress={() => { Haptics.selectionAsync(); setSelectedId(item.id); }}
+                      />
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+            </View>
           </>
         ) : (
           <>
@@ -558,29 +612,64 @@ export function ShowsView({ onPlayVOD }: ShowsViewProps) {
                 }}
               />
             )}
-            {seriesList.length > 0 && (
-              <View style={[styles.seriesStrip, { borderTopColor: colors.border }]}>
-                <Text style={[styles.stripHeader, { color: colors.mutedForeground }]}>
-                  {seriesList.length} {seriesList.length === 1 ? "SERIES" : "SERIES"}
-                </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingHorizontal: 12, gap: 8, paddingBottom: bottomPad + 8 }}
-                >
-                  {seriesList.map((s) => (
-                    <SeriesCard
-                      key={s.name}
-                      name={s.name}
-                      logo={s.logo}
-                      badge={`${s.episodes.length} ep`}
-                      selected={currentSeries?.name === s.name}
-                      onPress={() => { Haptics.selectionAsync(); setSelectedId(s.name); }}
-                    />
-                  ))}
-                </ScrollView>
+            <View style={[styles.seriesStrip, { borderTopColor: colors.border }]}>
+              {/* Search bar */}
+              <View style={[styles.searchBar, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                <Feather name="search" size={14} color={colors.mutedForeground} />
+                <TextInput
+                  ref={inputRef}
+                  style={[styles.searchInput, { color: colors.foreground }]}
+                  placeholder="Search shows…"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={query}
+                  onChangeText={setQuery}
+                  returnKeyType="search"
+                  clearButtonMode="never"
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                />
+                {query.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => { setQuery(""); inputRef.current?.blur(); }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Feather name="x" size={14} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
               </View>
-            )}
+
+              {displaySeriesList.length === 0 ? (
+                <View style={styles.stripEmpty}>
+                  <Text style={[styles.stripEmptyText, { color: colors.mutedForeground }]}>
+                    No results for "{query}"
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={[styles.stripHeader, { color: colors.mutedForeground }]}>
+                    {searchActive
+                      ? `${displaySeriesList.length} ${displaySeriesList.length === 1 ? "RESULT" : "RESULTS"}`
+                      : `${displaySeriesList.length} SERIES`}
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: 12, gap: 8, paddingBottom: bottomPad + 8 }}
+                  >
+                    {displaySeriesList.map((s) => (
+                      <SeriesCard
+                        key={s.name}
+                        name={s.name}
+                        logo={s.logo}
+                        badge={`${s.episodes.length} ep`}
+                        selected={currentSeries?.name === s.name}
+                        onPress={() => { Haptics.selectionAsync(); setSelectedId(s.name); }}
+                      />
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+            </View>
           </>
         )}
       </View>
@@ -837,6 +926,33 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
+  },
+  // ── search bar ──
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 10,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    paddingVertical: 0,
+  },
+  stripEmpty: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  stripEmptyText: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
   },
   // ── series strip ──
   seriesStrip: {
