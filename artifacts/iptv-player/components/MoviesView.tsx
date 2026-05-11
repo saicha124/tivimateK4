@@ -4,7 +4,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import React, { useMemo, useState } from "react";
 import {
-  FlatList,
   Platform,
   Pressable,
   ScrollView,
@@ -23,6 +22,163 @@ const SPECIAL_CATS = ["All movies", "My list", "History"];
 interface MoviesViewProps {
   onPlayVOD: (url: string, name: string) => void;
 }
+
+// ─── Rich movie detail pane ───────────────────────────────────────────────────
+
+function MovieDetailPane({
+  item,
+  isFav,
+  onPlay,
+  onToggleFav,
+}: {
+  item: VODItem;
+  isFav: boolean;
+  onPlay: () => void;
+  onToggleFav: () => void;
+}) {
+  const colors = useColors();
+
+  const yearStr = item.year ? item.year.slice(0, 4) : null;
+  const ratingVal = item.rating ? parseFloat(item.rating) : null;
+  const hasRating = ratingVal !== null && !isNaN(ratingVal);
+
+  return (
+    <View style={styles.detailRoot}>
+      {/* Backdrop banner */}
+      <View style={styles.detailBanner}>
+        {item.logo ? (
+          <Image
+            source={{ uri: item.logo }}
+            style={StyleSheet.absoluteFillObject}
+            contentFit="cover"
+            blurRadius={Platform.OS === "web" ? 0 : 4}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.secondary }]} />
+        )}
+        <LinearGradient
+          colors={["rgba(0,0,0,0.1)", "rgba(13,13,13,0.97)"]}
+          style={StyleSheet.absoluteFillObject}
+        />
+
+        <View style={styles.bannerLayout}>
+          {/* Poster thumbnail */}
+          {item.logo ? (
+            <View style={styles.posterWrap}>
+              <Image source={{ uri: item.logo }} style={styles.poster} contentFit="cover" />
+            </View>
+          ) : (
+            <View style={[styles.posterWrap, styles.posterPlaceholder, { backgroundColor: colors.secondary }]}>
+              <Feather name="film" size={28} color={colors.mutedForeground} />
+            </View>
+          )}
+
+          {/* Info column */}
+          <View style={styles.bannerInfo}>
+            <Text style={styles.bannerTitle} numberOfLines={2}>{item.name}</Text>
+
+            {/* Badges row: year · IMDb · age */}
+            <View style={styles.badgeRow}>
+              {yearStr ? (
+                <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
+                  <Text style={[styles.badgeText, { color: colors.mutedForeground }]}>{yearStr}</Text>
+                </View>
+              ) : null}
+              {hasRating ? (
+                <View style={[styles.badge, { backgroundColor: "#f5c51820" }]}>
+                  <Feather name="star" size={9} color="#f5c518" />
+                  <Text style={[styles.badgeText, { color: "#f5c518" }]}>{item.rating} IMDb</Text>
+                </View>
+              ) : null}
+              {item.age ? (
+                <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
+                  <Text style={[styles.badgeText, { color: colors.mutedForeground }]}>{item.age}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Genres */}
+            {item.genres ? (
+              <Text style={[styles.genresText, { color: colors.primary }]} numberOfLines={1}>
+                {item.genres}
+              </Text>
+            ) : item.category ? (
+              <Text style={[styles.genresText, { color: colors.primary }]} numberOfLines={1}>
+                {item.category}
+              </Text>
+            ) : null}
+
+            {/* Action buttons */}
+            <View style={styles.bannerActions}>
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  onPlay();
+                }}
+                style={[styles.playBtn, { backgroundColor: colors.foreground }]}
+                activeOpacity={0.85}
+              >
+                <Feather name="play" size={15} color={colors.background} />
+                <Text style={[styles.playBtnText, { color: colors.background }]}>Play</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { Haptics.selectionAsync(); onToggleFav(); }}
+                style={[
+                  styles.favBtn,
+                  {
+                    backgroundColor: isFav ? `${colors.primary}22` : colors.secondary,
+                    borderColor: isFav ? colors.primary : colors.border,
+                  },
+                ]}
+                activeOpacity={0.8}
+              >
+                <Feather name="bookmark" size={14} color={isFav ? colors.primary : colors.mutedForeground} />
+                <Text style={[styles.favBtnText, { color: isFav ? colors.primary : colors.mutedForeground }]}>
+                  {isFav ? "Saved" : "My List"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* Metadata rows */}
+      <ScrollView
+        style={styles.metaScroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 8 }}
+        nestedScrollEnabled
+      >
+        {item.description ? (
+          <View style={styles.metaBlock}>
+            <Text style={[styles.metaLabel, { color: colors.mutedForeground }]}>SYNOPSIS</Text>
+            <Text style={[styles.metaValue, { color: colors.foreground }]}>{item.description}</Text>
+          </View>
+        ) : null}
+
+        {item.director && item.director !== "N/A" ? (
+          <View style={[styles.metaRow, { borderTopColor: colors.border }]}>
+            <Text style={[styles.metaRowLabel, { color: colors.mutedForeground }]}>Director</Text>
+            <Text style={[styles.metaRowValue, { color: colors.foreground }]} numberOfLines={2}>
+              {item.director}
+            </Text>
+          </View>
+        ) : null}
+
+        {item.actors && item.actors !== "N/A" ? (
+          <View style={[styles.metaRow, { borderTopColor: colors.border }]}>
+            <Text style={[styles.metaRowLabel, { color: colors.mutedForeground }]}>Cast</Text>
+            <Text style={[styles.metaRowValue, { color: colors.foreground }]} numberOfLines={3}>
+              {item.actors}
+            </Text>
+          </View>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+// ─── Poster card ──────────────────────────────────────────────────────────────
 
 function PosterCard({
   item,
@@ -50,7 +206,7 @@ function PosterCard({
           contentFit="cover"
         />
       ) : (
-        <View style={[styles.posterPlaceholder, { backgroundColor: colors.secondary }]}>
+        <View style={[styles.posterPlaceholderCard, { backgroundColor: colors.secondary }]}>
           <Feather name="film" size={28} color={colors.mutedForeground} />
         </View>
       )}
@@ -68,71 +224,7 @@ function PosterCard({
   );
 }
 
-function DetailPane({
-  item,
-  isFav,
-  onPlay,
-  onToggleFav,
-}: {
-  item: VODItem;
-  isFav: boolean;
-  onPlay: () => void;
-  onToggleFav: () => void;
-}) {
-  const colors = useColors();
-
-  return (
-    <View style={styles.detailPane}>
-      {item.logo ? (
-        <Image
-          source={{ uri: item.logo }}
-          style={StyleSheet.absoluteFillObject}
-          contentFit="cover"
-          blurRadius={Platform.OS === "web" ? 0 : 2}
-        />
-      ) : (
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.secondary }]} />
-      )}
-      <LinearGradient
-        colors={["rgba(0,0,0,0.35)", "rgba(17,17,17,0.97)"]}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <View style={styles.detailContent}>
-        <Text style={styles.detailTitle} numberOfLines={2}>
-          {item.name}
-        </Text>
-        <Text style={[styles.detailCategory, { color: colors.primary }]}>
-          {item.category}
-        </Text>
-        {item.description ? (
-          <Text style={[styles.detailDesc, { color: colors.secondaryForeground }]} numberOfLines={3}>
-            {item.description}
-          </Text>
-        ) : null}
-        <View style={styles.detailActions}>
-          <TouchableOpacity
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onPlay(); }}
-            style={[styles.playBtn, { backgroundColor: colors.foreground }]}
-            activeOpacity={0.85}
-          >
-            <Feather name="play" size={16} color={colors.background} />
-            <Text style={[styles.playBtnText, { color: colors.background }]}>Play</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); onToggleFav(); }}
-            style={[styles.favBtn, { backgroundColor: isFav ? `${colors.primary}25` : colors.secondary, borderColor: isFav ? colors.primary : colors.border }]}
-            activeOpacity={0.8}
-          >
-            <Feather name="bookmark" size={15} color={isFav ? colors.primary : colors.mutedForeground} />
-            <Text style={[styles.favBtnText, { color: isFav ? colors.primary : colors.mutedForeground }]}>
-              {isFav ? "Saved" : "My List"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-}
+// ─── Main MoviesView ──────────────────────────────────────────────────────────
 
 export function MoviesView({ onPlayVOD }: MoviesViewProps) {
   const colors = useColors();
@@ -189,9 +281,17 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Left category sidebar */}
-      <View style={[styles.catSidebar, { backgroundColor: colors.sidebar, borderRightColor: colors.border, paddingTop: topPad + 8 }]}>
+      <View
+        style={[
+          styles.catSidebar,
+          { backgroundColor: colors.sidebar, borderRightColor: colors.border, paddingTop: topPad + 8 },
+        ]}
+      >
         <Text style={[styles.catHeader, { color: colors.mutedForeground }]}>MOVIES</Text>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bottomPad + 16 }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: bottomPad + 16 }}
+        >
           {categories.map((cat) => {
             const active = cat === selectedCat;
             const isSpecial = SPECIAL_CATS.includes(cat);
@@ -226,7 +326,9 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
                 >
                   {cat}
                 </Text>
-                {active && <View style={[styles.catActiveBar, { backgroundColor: colors.primary }]} />}
+                {active && (
+                  <View style={[styles.catActiveBar, { backgroundColor: colors.primary }]} />
+                )}
               </TouchableOpacity>
             );
           })}
@@ -235,9 +337,9 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
 
       {/* Right content */}
       <View style={styles.content}>
-        {/* Detail pane for selected movie */}
+        {/* Rich detail pane for selected movie */}
         {selectedMovie && (
-          <DetailPane
+          <MovieDetailPane
             item={selectedMovie}
             isFav={favorites.includes(selectedMovie.id)}
             onPlay={() => onPlayVOD(selectedMovie.url, selectedMovie.name)}
@@ -266,7 +368,11 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
                     <Feather name="chevron-right" size={13} color={colors.primary} />
                   </TouchableOpacity>
                 </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}
+                >
                   {catGroups![cat].slice(0, 20).map((item) => (
                     <PosterCard
                       key={item.id}
@@ -305,14 +411,20 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
   );
 }
 
+// ─── Dimensions ───────────────────────────────────────────────────────────────
+
 const POSTER_W = 110;
 const POSTER_H = 160;
+const BANNER_POSTER_W = 76;
+const BANNER_POSTER_H = 108;
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
     flexDirection: "row",
   },
+
+  // ── Category sidebar ──────────────────────────────────────────────────────
   catSidebar: {
     width: 160,
     borderRightWidth: 1,
@@ -346,50 +458,93 @@ const styles = StyleSheet.create({
     width: 3,
     borderRadius: 2,
   },
+
+  // ── Right content ─────────────────────────────────────────────────────────
   content: {
     flex: 1,
   },
-  detailPane: {
-    height: 210,
+
+  // ── Rich detail pane ──────────────────────────────────────────────────────
+  detailRoot: {
+    maxHeight: 340,
     overflow: "hidden",
-    position: "relative",
   },
-  detailContent: {
+  detailBanner: {
+    height: 200,
+    position: "relative",
+    overflow: "hidden",
+  },
+  bannerLayout: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 16,
-    paddingTop: 32,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    gap: 12,
   },
-  detailTitle: {
-    fontSize: 20,
+  posterWrap: {
+    width: BANNER_POSTER_W,
+    height: BANNER_POSTER_H,
+    borderRadius: 6,
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  poster: {
+    width: BANNER_POSTER_W,
+    height: BANNER_POSTER_H,
+  },
+  posterPlaceholder: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bannerInfo: {
+    flex: 1,
+    paddingBottom: 2,
+  },
+  bannerTitle: {
+    fontSize: 17,
     fontFamily: "Inter_700Bold",
     color: "#fff",
-    marginBottom: 3,
+    marginBottom: 5,
+    lineHeight: 22,
   },
-  detailCategory: {
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    marginBottom: 5,
+  },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+  },
+  genresText: {
     fontSize: 11,
     fontFamily: "Inter_500Medium",
-    marginBottom: 6,
+    marginBottom: 8,
   },
-  detailDesc: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 18,
-    marginBottom: 10,
-  },
-  detailActions: {
+  bannerActions: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
     alignItems: "center",
   },
   playBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 18,
-    paddingVertical: 9,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 6,
   },
   playBtnText: {
@@ -400,8 +555,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
   },
@@ -409,6 +564,49 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_500Medium",
   },
+
+  // ── Metadata rows ─────────────────────────────────────────────────────────
+  metaScroll: {
+    maxHeight: 140,
+  },
+  metaBlock: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  metaLabel: {
+    fontSize: 9,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 1.2,
+    marginBottom: 4,
+  },
+  metaValue: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
+  },
+  metaRow: {
+    flexDirection: "row",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 10,
+  },
+  metaRowLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    width: 56,
+    flexShrink: 0,
+    paddingTop: 1,
+  },
+  metaRowValue: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    flex: 1,
+    lineHeight: 17,
+  },
+
+  // ── Poster grid ───────────────────────────────────────────────────────────
   catGroup: {
     marginBottom: 20,
   },
@@ -457,7 +655,7 @@ const styles = StyleSheet.create({
     width: POSTER_W,
     height: POSTER_H,
   },
-  posterPlaceholder: {
+  posterPlaceholderCard: {
     width: POSTER_W,
     height: POSTER_H,
     justifyContent: "center",
@@ -482,6 +680,8 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     color: "#fff",
   },
+
+  // ── Empty states ──────────────────────────────────────────────────────────
   emptyFilter: {
     paddingVertical: 60,
     alignItems: "center",
