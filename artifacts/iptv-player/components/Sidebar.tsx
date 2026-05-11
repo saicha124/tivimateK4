@@ -23,12 +23,12 @@ const ITEMS: SidebarItem[] = [
   { section: "TV", icon: "tv", label: "TV" },
   { section: "Movies", icon: "film", label: "Movies" },
   { section: "Shows", icon: "grid", label: "Shows" },
+  { section: "Search", icon: "search", label: "Search" },
   { section: "Recordings", icon: "video", label: "Recordings" },
   { section: "My List", icon: "bookmark", label: "My List" },
 ];
 
 interface SidebarProps {
-  onSearch: () => void;
   onSettings: () => void;
   onSwitchPlaylist: () => void;
 }
@@ -39,7 +39,7 @@ function getRecordingStatus(startTime: number, endTime: number, now: number) {
   return "scheduled";
 }
 
-export function Sidebar({ onSearch, onSettings, onSwitchPlaylist }: SidebarProps) {
+export function Sidebar({ onSettings, onSwitchPlaylist }: SidebarProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { currentSection, setCurrentSection, activePlaylist, playlists, recordings } = useIPTV();
@@ -112,21 +112,6 @@ export function Sidebar({ onSearch, onSettings, onSwitchPlaylist }: SidebarProps
       )}
 
       <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-      {/* Search */}
-      <TouchableOpacity
-        onPress={() => {
-          Haptics.selectionAsync();
-          onSearch();
-        }}
-        style={styles.item}
-        activeOpacity={0.7}
-      >
-        <Feather name="search" size={19} color={colors.mutedForeground} />
-        <Text style={[styles.itemLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          Search
-        </Text>
-      </TouchableOpacity>
 
       {/* Nav items */}
       <View style={styles.navItems}>

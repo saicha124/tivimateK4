@@ -58,7 +58,7 @@ export interface Playlist {
   lastUpdated: number;
 }
 
-export type Section = "TV" | "Movies" | "Shows" | "My List" | "Recordings";
+export type Section = "TV" | "Movies" | "Shows" | "My List" | "Recordings" | "Search";
 
 export type GroupSortOrder = "playlist" | "name-asc" | "name-desc";
 

@@ -24,7 +24,7 @@ import { PlaylistSwitcher } from "@/components/PlaylistSwitcher";
 import { NowNextBar } from "@/components/NowNextBar";
 import { ProgramInfo } from "@/components/ProgramInfo";
 import { RecordingsList } from "@/components/RecordingsList";
-import { SearchModal } from "@/components/SearchModal";
+import { SearchView } from "@/components/SearchView";
 import { ShowsView } from "@/components/ShowsView";
 import { Sidebar } from "@/components/Sidebar";
 import { Channel, EPGProgram, useIPTV } from "@/context/IPTVContext";
@@ -39,7 +39,6 @@ export default function HomeScreen() {
   const { activePlaylist, selectedChannel, currentSection, setCurrentSection, addToWatchHistory, resolveStalkerStreamUrl } = useIPTV();
 
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [manageFavoritesMode, setManageFavoritesMode] = useState(false);
@@ -146,7 +145,7 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
 
       <View style={styles.mainLayout}>
-        <Sidebar onSearch={() => setShowSearch(true)} onSettings={handleSettings} onSwitchPlaylist={() => setShowSwitcher(true)} />
+        <Sidebar onSettings={handleSettings} onSwitchPlaylist={() => setShowSwitcher(true)} />
 
         {/* Right content area */}
         <View style={styles.contentArea}>
@@ -158,7 +157,21 @@ export default function HomeScreen() {
             showEPGToggle={currentSection === "TV"}
           />
 
-          {currentSection === "Recordings" ? (
+          {currentSection === "Search" ? (
+            /* Global search */
+            <SearchView
+              onPlayChannel={handlePlayChannel}
+              onPlayVOD={async (url, name) => {
+                let playUrl = url;
+                if (activePlaylist?.type === "StalkerPortal" && url.startsWith("stalker-")) {
+                  setResolvingStream(true);
+                  try { playUrl = await resolveStalkerStreamUrl(activePlaylist, url); } catch { setResolvingStream(false); return; }
+                  setResolvingStream(false);
+                }
+                router.push({ pathname: "/player", params: { url: playUrl, name } });
+              }}
+            />
+          ) : currentSection === "Recordings" ? (
             /* Recordings view */
             <View style={styles.recordingsContainer}>
               <RecordingsList onPlay={(url, name) => {
@@ -249,11 +262,6 @@ export default function HomeScreen() {
       <AddPlaylistWizard
         visible={showAddPlaylist}
         onClose={() => setShowAddPlaylist(false)}
-      />
-      <SearchModal
-        visible={showSearch}
-        onClose={() => setShowSearch(false)}
-        onPlayChannel={handlePlayChannel}
       />
       <PlaylistSwitcher
         visible={showSwitcher}
