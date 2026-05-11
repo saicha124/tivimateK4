@@ -278,6 +278,7 @@ export function ChannelList({
           setSelectedChannel(channel);
         }}
         onLongPress={() => handleLongPress(channel)}
+        delayLongPress={300}
         style={[
           styles.item,
           active && { backgroundColor: colors.highlight },
@@ -407,6 +408,7 @@ export function ChannelList({
           setSelectedChannel(channel);
         }}
         onLongPress={() => handleLongPress(channel)}
+        delayLongPress={300}
         activeOpacity={0.75}
         style={[
           styles.gridCell,

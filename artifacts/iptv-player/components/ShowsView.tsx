@@ -2,8 +2,9 @@ import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import React, { useRef, useMemo, useState } from "react";
+import React, { useRef, useMemo, useState, useEffect, useCallback } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   ScrollView,
@@ -74,23 +75,111 @@ function groupEpisodesBySeasons(episodes: VODItem[]): Record<number, VODItem[]> 
   return map;
 }
 
-// ─── Stalker series detail (rich metadata + direct play) ─────────────────────
+// ─── Stalker series detail (seasons + episodes from portal) ──────────────────
+
+interface StalkerSeason { id: string; name: string }
+interface StalkerEpisode { id: string; name: string; episodeNum: number; logo?: string }
 
 function StalkerSeriesDetail({
   item,
   isFav,
-  onPlay,
+  onPlayEpisode,
   onToggleFav,
 }: {
   item: VODItem;
   isFav: boolean;
-  onPlay: () => void;
+  onPlayEpisode: (url: string, name: string) => void;
   onToggleFav: () => void;
 }) {
   const colors = useColors();
+  const { activePlaylist } = useIPTV();
+
+  const [seasons, setSeasons] = useState<StalkerSeason[]>([]);
+  const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
+  const [episodes, setEpisodes] = useState<StalkerEpisode[]>([]);
+  const [loadingSeasons, setLoadingSeasons] = useState(false);
+  const [loadingEpisodes, setLoadingEpisodes] = useState(false);
+
+  const seriesId = item.id;
+
+  const fetchSeasons = useCallback(async () => {
+    if (!activePlaylist?.serverAddress || !activePlaylist?.macAddress) return;
+    setLoadingSeasons(true);
+    try {
+      const domain = process.env.EXPO_PUBLIC_DOMAIN;
+      const base = domain ? `https://${domain}/api` : "/api";
+      const qs = new URLSearchParams({
+        portal: activePlaylist.serverAddress,
+        mac: activePlaylist.macAddress,
+        token: activePlaylist.stalkerToken || "",
+        action: "get_ordered_list",
+        type: "seasons",
+        series_id: seriesId,
+        sortby: "added",
+        p: "1",
+        items_num: "50",
+      });
+      const res = await fetch(`${base}/stalker/proxy?${qs}`);
+      const data = await res.json();
+      const raw: any[] = data?.js?.data || [];
+      const loaded: StalkerSeason[] = raw.map((s: any) => ({
+        id: String(s.id),
+        name: s.name || `Season ${s.id}`,
+      }));
+      setSeasons(loaded);
+      if (loaded.length > 0) setSelectedSeasonId(loaded[0].id);
+    } catch {
+      // no seasons available — show metadata fallback
+    } finally {
+      setLoadingSeasons(false);
+    }
+  }, [activePlaylist, seriesId]);
+
+  const fetchEpisodes = useCallback(async (seasonId: string) => {
+    if (!activePlaylist?.serverAddress || !activePlaylist?.macAddress) return;
+    setLoadingEpisodes(true);
+    try {
+      const domain = process.env.EXPO_PUBLIC_DOMAIN;
+      const base = domain ? `https://${domain}/api` : "/api";
+      const qs = new URLSearchParams({
+        portal: activePlaylist.serverAddress,
+        mac: activePlaylist.macAddress,
+        token: activePlaylist.stalkerToken || "",
+        action: "get_ordered_list",
+        type: "episodes",
+        series_id: seriesId,
+        season_id: seasonId,
+        sortby: "added",
+        p: "1",
+        items_num: "200",
+      });
+      const res = await fetch(`${base}/stalker/proxy?${qs}`);
+      const data = await res.json();
+      const raw: any[] = data?.js?.data || [];
+      setEpisodes(raw.map((ep: any, idx: number) => ({
+        id: String(ep.id),
+        name: ep.name || `Episode ${idx + 1}`,
+        episodeNum: idx + 1,
+        logo: ep.screenshot_uri || ep.cover || undefined,
+      })));
+    } catch {
+      setEpisodes([]);
+    } finally {
+      setLoadingEpisodes(false);
+    }
+  }, [activePlaylist, seriesId]);
+
+  useEffect(() => {
+    fetchSeasons();
+  }, [fetchSeasons]);
+
+  useEffect(() => {
+    if (selectedSeasonId) fetchEpisodes(selectedSeasonId);
+  }, [selectedSeasonId, fetchEpisodes]);
 
   const yearStr = item.year ? item.year.slice(0, 4) : null;
   const ratingVal = item.rating ? parseFloat(item.rating) : null;
+  const hasSeasonsData = seasons.length > 0;
 
   return (
     <View style={styles.detailRoot}>
@@ -112,7 +201,6 @@ function StalkerSeriesDetail({
         />
 
         <View style={styles.bannerLayout}>
-          {/* Poster thumbnail */}
           {item.logo ? (
             <View style={styles.posterWrap}>
               <Image source={{ uri: item.logo }} style={styles.poster} contentFit="cover" />
@@ -123,11 +211,9 @@ function StalkerSeriesDetail({
             </View>
           )}
 
-          {/* Info column */}
           <View style={styles.bannerInfo}>
             <Text style={styles.bannerTitle} numberOfLines={2}>{item.name}</Text>
 
-            {/* Badges row */}
             <View style={styles.badgeRow}>
               {yearStr && (
                 <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
@@ -140,6 +226,13 @@ function StalkerSeriesDetail({
                   <Text style={[styles.badgeText, { color: "#f5c518" }]}>{item.rating} IMDb</Text>
                 </View>
               )}
+              {hasSeasonsData && (
+                <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
+                  <Text style={[styles.badgeText, { color: colors.mutedForeground }]}>
+                    {seasons.length} {seasons.length === 1 ? "Season" : "Seasons"}
+                  </Text>
+                </View>
+              )}
               {item.age && (
                 <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
                   <Text style={[styles.badgeText, { color: colors.mutedForeground }]}>{item.age}</Text>
@@ -147,25 +240,29 @@ function StalkerSeriesDetail({
               )}
             </View>
 
-            {/* Genres */}
             {item.genres && (
               <Text style={[styles.genresText, { color: colors.primary }]} numberOfLines={1}>
                 {item.genres}
               </Text>
             )}
 
-            {/* Action buttons */}
             <View style={styles.bannerActions}>
               <TouchableOpacity
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  onPlay();
+                  if (episodes.length > 0) {
+                    onPlayEpisode(`stalker-episode:${seriesId}:1`, `${item.name} E1`);
+                  } else {
+                    onPlayEpisode(item.url, item.name);
+                  }
                 }}
                 style={[styles.playBtn, { backgroundColor: colors.foreground }]}
                 activeOpacity={0.85}
               >
                 <Feather name="play" size={15} color={colors.background} />
-                <Text style={[styles.playBtnText, { color: colors.background }]}>Watch</Text>
+                <Text style={[styles.playBtnText, { color: colors.background }]}>
+                  {hasSeasonsData ? "Play S1 E1" : "Watch"}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); onToggleFav(); }}
@@ -185,33 +282,112 @@ function StalkerSeriesDetail({
         </View>
       </View>
 
-      {/* Metadata section */}
-      <ScrollView
-        style={styles.metaScroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 12 }}
-      >
-        {item.description ? (
-          <View style={styles.metaBlock}>
-            <Text style={[styles.metaLabel, { color: colors.mutedForeground }]}>SYNOPSIS</Text>
-            <Text style={[styles.metaValue, { color: colors.foreground }]}>{item.description}</Text>
-          </View>
-        ) : null}
+      {/* Seasons + Episodes or metadata fallback */}
+      {hasSeasonsData ? (
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={[styles.seasonTabs, { backgroundColor: colors.sidebar, borderBottomColor: colors.border }]}
+            contentContainerStyle={{ paddingHorizontal: 12, gap: 4 }}
+          >
+            {seasons.map((s) => {
+              const active = s.id === selectedSeasonId;
+              return (
+                <TouchableOpacity
+                  key={s.id}
+                  onPress={() => { Haptics.selectionAsync(); setSelectedSeasonId(s.id); }}
+                  style={[styles.seasonTab, active ? { backgroundColor: colors.primary } : { backgroundColor: colors.secondary }]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.seasonTabText, { color: active ? "#fff" : colors.mutedForeground }]}>
+                    {s.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
-        {item.director && item.director !== "N/A" && (
-          <View style={[styles.metaRow, { borderTopColor: colors.border }]}>
-            <Text style={[styles.metaRowLabel, { color: colors.mutedForeground }]}>Director</Text>
-            <Text style={[styles.metaRowValue, { color: colors.foreground }]} numberOfLines={2}>{item.director}</Text>
-          </View>
-        )}
-
-        {item.actors && item.actors !== "N/A" && (
-          <View style={[styles.metaRow, { borderTopColor: colors.border }]}>
-            <Text style={[styles.metaRowLabel, { color: colors.mutedForeground }]}>Cast</Text>
-            <Text style={[styles.metaRowValue, { color: colors.foreground }]} numberOfLines={3}>{item.actors}</Text>
-          </View>
-        )}
-      </ScrollView>
+          {loadingEpisodes ? (
+            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 8 }}>
+              <ActivityIndicator color={colors.primary} />
+            </View>
+          ) : (
+            <FlatList
+              data={episodes}
+              keyExtractor={(ep) => ep.id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20, paddingTop: 4 }}
+              renderItem={({ item: ep }) => (
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    onPlayEpisode(`stalker-episode:${seriesId}:${ep.episodeNum}`, `${item.name} E${ep.episodeNum}`);
+                  }}
+                  style={[styles.epRow, { borderBottomColor: colors.border }]}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.epNumBox, { backgroundColor: colors.secondary }]}>
+                    <Text style={[styles.epNum, { color: colors.mutedForeground }]}>{ep.episodeNum}</Text>
+                  </View>
+                  <View style={[styles.epThumb, { backgroundColor: colors.secondary }]}>
+                    {ep.logo ? (
+                      <Image source={{ uri: ep.logo }} style={styles.epThumbImg} contentFit="cover" />
+                    ) : (
+                      <Feather name="film" size={18} color={colors.mutedForeground} />
+                    )}
+                  </View>
+                  <View style={styles.epInfo}>
+                    <Text style={[styles.epTitle, { color: colors.foreground }]} numberOfLines={2}>{ep.name}</Text>
+                  </View>
+                  <View style={[styles.epPlayBtn, { backgroundColor: colors.primary }]}>
+                    <Feather name="play" size={13} color="#fff" />
+                  </View>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={{ padding: 20, alignItems: "center" }}>
+                  <Text style={{ color: colors.mutedForeground, fontSize: 13, fontFamily: "Inter_400Regular" }}>
+                    No episodes found
+                  </Text>
+                </View>
+              }
+            />
+          )}
+        </View>
+      ) : loadingSeasons ? (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 8 }}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular" }}>
+            Loading seasons…
+          </Text>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.metaScroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 12 }}
+        >
+          {item.description ? (
+            <View style={styles.metaBlock}>
+              <Text style={[styles.metaLabel, { color: colors.mutedForeground }]}>SYNOPSIS</Text>
+              <Text style={[styles.metaValue, { color: colors.foreground }]}>{item.description}</Text>
+            </View>
+          ) : null}
+          {item.director && item.director !== "N/A" && (
+            <View style={[styles.metaRow, { borderTopColor: colors.border }]}>
+              <Text style={[styles.metaRowLabel, { color: colors.mutedForeground }]}>Director</Text>
+              <Text style={[styles.metaRowValue, { color: colors.foreground }]} numberOfLines={2}>{item.director}</Text>
+            </View>
+          )}
+          {item.actors && item.actors !== "N/A" && (
+            <View style={[styles.metaRow, { borderTopColor: colors.border }]}>
+              <Text style={[styles.metaRowLabel, { color: colors.mutedForeground }]}>Cast</Text>
+              <Text style={[styles.metaRowValue, { color: colors.foreground }]} numberOfLines={3}>{item.actors}</Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -537,16 +713,16 @@ export function ShowsView({ onPlayVOD }: ShowsViewProps) {
               <StalkerSeriesDetail
                 item={currentStalkerItem}
                 isFav={favorites.includes(currentStalkerItem.id)}
-                onPlay={() => {
+                onPlayEpisode={(url, epName) => {
                   addToWatchHistory({
                     channelId: currentStalkerItem.id,
-                    channelName: currentStalkerItem.name,
+                    channelName: epName,
                     channelGroup: currentStalkerItem.category,
                     channelLogo: currentStalkerItem.logo,
-                    channelUrl: currentStalkerItem.url,
+                    channelUrl: url,
                     type: "show",
                   });
-                  onPlayVOD(currentStalkerItem.url, currentStalkerItem.name);
+                  onPlayVOD(url, epName);
                 }}
                 onToggleFav={() => toggleFavorite(currentStalkerItem.id)}
               />

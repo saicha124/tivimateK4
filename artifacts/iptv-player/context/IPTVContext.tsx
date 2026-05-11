@@ -747,6 +747,27 @@ export function IPTVProvider({ children }: { children: React.ReactNode }) {
       return streamUrl;
     }
 
+    if (stalkerUrl.startsWith("stalker-episode:")) {
+      // Format: stalker-episode:{seriesId}:{episodeSeq}
+      const rest = stalkerUrl.replace("stalker-episode:", "");
+      const colonIdx = rest.indexOf(":");
+      const seriesId = colonIdx >= 0 ? rest.slice(0, colonIdx) : rest;
+      const episodeSeq = colonIdx >= 0 ? rest.slice(colonIdx + 1) : "1";
+      const resp = await call({
+        type: "vod",
+        action: "create_link",
+        cmd: "ffmpeg ",
+        series: episodeSeq,
+        forced_storage: "",
+        download: "0",
+        movie_id: seriesId,
+      });
+      const resultCmd: string = resp?.js?.cmd || "";
+      const streamUrl = resultCmd.replace(/^ffmpeg\s+/, "").trim();
+      if (!streamUrl) throw new Error("Portal returned no episode stream URL");
+      return streamUrl;
+    }
+
     throw new Error(`Unknown Stalker URL scheme: ${stalkerUrl}`);
   }, []);
 

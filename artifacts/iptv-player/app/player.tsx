@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
+import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -23,6 +24,15 @@ import { useIPTV } from "@/context/IPTVContext";
 import { usePiP } from "@/context/PiPContext";
 import { MultiviewScreen } from "@/components/MultiviewScreen";
 import { EpgOverlay } from "@/components/EpgOverlay";
+
+function fmtHHMM(ms: number) {
+  const d = new Date(ms);
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h >= 12 ? "PM" : "AM";
+  const hh = h % 12 || 12;
+  return `${hh}:${String(m).padStart(2, "0")} ${ampm}`;
+}
 
 function formatTime(ms: number) {
   const totalSec = Math.floor(ms / 1000);
@@ -436,12 +446,42 @@ export default function PlayerScreen() {
     : url;
 
   const { startPiP } = usePiP();
-  const { activePlaylist } = useIPTV();
+  const { activePlaylist, watchHistory, stalkerEpgData } = useIPTV();
 
   const channelEpg = useMemo(() => {
     if (!channelId || !activePlaylist) return undefined;
     return activePlaylist.channels.find((c) => c.id === channelId)?.epg;
   }, [channelId, activePlaylist]);
+
+  const [epgNow, setEpgNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setEpgNow(Date.now()), 15000);
+    return () => clearInterval(id);
+  }, []);
+
+  const epgPrograms = useMemo(() => {
+    if (!channelId) return undefined;
+    if (channelEpg && channelEpg.length > 0) return channelEpg;
+    if (stalkerEpgData[channelId]) return stalkerEpgData[channelId];
+    return undefined;
+  }, [channelId, channelEpg, stalkerEpgData]);
+
+  const currentEpgProg = useMemo(() => {
+    if (!epgPrograms) return undefined;
+    return epgPrograms.find((p) => p.startTime <= epgNow && p.endTime > epgNow);
+  }, [epgPrograms, epgNow]);
+
+  const nextEpgProg = useMemo(() => {
+    if (!epgPrograms || !currentEpgProg) return undefined;
+    const idx = epgPrograms.indexOf(currentEpgProg);
+    return idx >= 0 ? epgPrograms[idx + 1] : undefined;
+  }, [epgPrograms, currentEpgProg]);
+
+  const epgProgress = useMemo(() => {
+    if (!currentEpgProg) return 0;
+    const total = currentEpgProg.endTime - currentEpgProg.startTime;
+    return total > 0 ? Math.min(1, (epgNow - currentEpgProg.startTime) / total) : 0;
+  }, [currentEpgProg, epgNow]);
 
   const [status, setStatus] = useState<any>({});
   const [showControls, setShowControls] = useState(true);
@@ -614,7 +654,7 @@ export default function PlayerScreen() {
                 </Text>
               </TouchableOpacity>
             )}
-            {!isCatchUp && sleepSecondsLeft === null && (
+            {!isCatchUp && sleepSecondsLeft === null && !!channelId && (
               <View style={styles.liveBadge}>
                 <View style={styles.liveDot} />
                 <Text style={styles.liveText}>LIVE</Text>
@@ -679,16 +719,112 @@ export default function PlayerScreen() {
                   }}
                   colors={colors}
                 />
+              ) : !channelId && duration > 0 ? (
+                <Scrubber
+                  position={position}
+                  duration={duration}
+                  onSeek={async (pct) => {
+                    if (videoRef.current && duration > 0) {
+                      await videoRef.current.setPositionAsync(pct * duration);
+                    }
+                  }}
+                  colors={colors}
+                />
+              ) : channelId ? (
+                <View style={styles.epgPanel}>
+                  <View style={styles.qualityRow}>
+                    <View style={[styles.qBadge, { backgroundColor: `${colors.primary}30` }]}>
+                      <Text style={[styles.qBadgeText, { color: colors.primary }]}>HD</Text>
+                    </View>
+                    <View style={[styles.qBadge, { backgroundColor: "rgba(255,255,255,0.12)" }]}>
+                      <Text style={[styles.qBadgeText, { color: "rgba(255,255,255,0.7)" }]}>30 FPS</Text>
+                    </View>
+                    <View style={[styles.qBadge, { backgroundColor: "rgba(255,255,255,0.12)" }]}>
+                      <Text style={[styles.qBadgeText, { color: "rgba(255,255,255,0.7)" }]}>STEREO</Text>
+                    </View>
+                    <View style={styles.liveDotRow}>
+                      <View style={[styles.liveDotSmall, { backgroundColor: "#f44336" }]} />
+                      <Text style={styles.liveBottomText}>LIVE</Text>
+                    </View>
+                  </View>
+                  {currentEpgProg ? (
+                    <>
+                      <Text style={styles.epgPanelTitle} numberOfLines={1}>{currentEpgProg.title}</Text>
+                      <View style={styles.epgTimeRow}>
+                        <Text style={styles.epgTimeText}>
+                          {fmtHHMM(currentEpgProg.startTime)} — {fmtHHMM(currentEpgProg.endTime)}
+                        </Text>
+                        <Text style={styles.epgMinsLeft}>
+                          {Math.max(0, Math.round((currentEpgProg.endTime - epgNow) / 60000))} min left
+                        </Text>
+                      </View>
+                      <View style={[styles.epgProgTrack, { backgroundColor: "rgba(255,255,255,0.18)" }]}>
+                        <View
+                          style={[styles.epgProgFill, { width: `${epgProgress * 100}%` as any, backgroundColor: colors.primary }]}
+                        />
+                      </View>
+                      {nextEpgProg && (
+                        <Text style={styles.epgNextText} numberOfLines={1}>
+                          NEXT: {nextEpgProg.title} · {fmtHHMM(nextEpgProg.startTime)}
+                        </Text>
+                      )}
+                    </>
+                  ) : null}
+                </View>
               ) : (
                 <View style={styles.liveBottomRow}>
                   <Feather name="radio" size={12} color={colors.primary} />
-                  <Text style={styles.liveBottomText}>LIVE</Text>
-                  <Text style={styles.streamInfo} numberOfLines={1}>
-                    {streamUrl ? (streamUrl.length > 50 ? streamUrl.substring(0, 50) + "…" : streamUrl) : ""}
-                  </Text>
+                  <Text style={styles.streamInfo} numberOfLines={1}>{name}</Text>
                 </View>
               )}
             </View>
+
+            {/* Channel history strip */}
+            {!isCatchUp && !!channelId && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={[styles.historyStrip, { backgroundColor: "rgba(0,0,0,0.82)" }]}
+                contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 6, gap: 8, alignItems: "center" }}
+              >
+                <TouchableOpacity
+                  onPress={() => { Haptics.selectionAsync(); setShowToolbar(false); setShowEpg(true); }}
+                  style={styles.histActionCard}
+                >
+                  <Feather name="grid" size={20} color="#fff" />
+                  <Text style={styles.histActionLabel}>TV guide</Text>
+                </TouchableOpacity>
+                <View style={styles.histSep} />
+                {watchHistory
+                  .filter((h) => h.type === "channel" || !h.type)
+                  .slice(0, 12)
+                  .map((h) => (
+                    <TouchableOpacity
+                      key={`${h.channelId}-${h.watchedAt}`}
+                      style={[
+                        styles.histChannelCard,
+                        h.channelId === channelId && { borderColor: colors.primary, borderWidth: 2 },
+                      ]}
+                      onPress={() => {
+                        if (h.channelId !== channelId) {
+                          Haptics.selectionAsync();
+                          router.replace({
+                            pathname: "/player",
+                            params: { url: h.channelUrl, name: h.channelName, channelId: h.channelId },
+                          });
+                        }
+                      }}
+                    >
+                      {h.channelLogo ? (
+                        <Image source={{ uri: h.channelLogo }} style={styles.histChannelLogo} contentFit="contain" />
+                      ) : (
+                        <Feather name="tv" size={14} color="rgba(255,255,255,0.6)" />
+                      )}
+                      <Text style={styles.histChannelName} numberOfLines={2}>{h.channelName}</Text>
+                    </TouchableOpacity>
+                  ))}
+              </ScrollView>
+            )}
 
             {/* Tivimate-style quick-action toolbar */}
             {showToolbar && (
@@ -932,5 +1068,118 @@ const styles = StyleSheet.create({
     color: "#666",
     fontSize: 16,
     fontFamily: "Inter_400Regular",
+  },
+  epgPanel: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  qualityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
+  },
+  qBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
+  },
+  qBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 0.5,
+  },
+  liveDotRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginLeft: "auto",
+  },
+  liveDotSmall: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  epgPanelTitle: {
+    color: "#fff",
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 3,
+  },
+  epgTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 5,
+  },
+  epgTimeText: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+  },
+  epgMinsLeft: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    marginLeft: "auto",
+  },
+  epgProgTrack: {
+    height: 3,
+    borderRadius: 2,
+    overflow: "hidden",
+    marginBottom: 4,
+  },
+  epgProgFill: {
+    height: 3,
+    borderRadius: 2,
+  },
+  epgNextText: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+  },
+  historyStrip: {},
+  histActionCard: {
+    alignItems: "center",
+    gap: 4,
+    width: 60,
+    height: 68,
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 8,
+  },
+  histActionLabel: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+  },
+  histSep: {
+    width: 1,
+    height: 48,
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+  histChannelCard: {
+    alignItems: "center",
+    gap: 3,
+    width: 60,
+    height: 68,
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 8,
+    padding: 4,
+    borderColor: "transparent",
+    borderWidth: 1,
+  },
+  histChannelLogo: {
+    width: 40,
+    height: 28,
+    borderRadius: 3,
+  },
+  histChannelName: {
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 9,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
   },
 });

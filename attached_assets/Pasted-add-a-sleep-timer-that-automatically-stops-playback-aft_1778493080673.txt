@@ -1,0 +1,14 @@
+add a sleep timer that automatically stops playback after a chosen duration (15 / 30 / 60 / 90 min or end of current program). and whenb i press long time on channel the toolbar menu that contien record etc is not apear , and wan i clic only on chanel live While a TV channel is being played in full screen, click OK button on the remote or just tap the screen if you are on a touch device. The following toolbar should show up from bottom of the screen. It shows the channel name and the icon, program guide details and the duration of the current show, Video quality (HD or SD) and so on.
+
+Below those, You can bring up the TV guide overview page as well as previously watched channels.
+
+Now click the downward button on the remote or just tap on the downward icon at the bottom of the screen. (image Screenshot from 2026-05-11 10-45-11 ) and Being on Full screen, long pressing the OK button will also bring this up. Few controls appear, some you know and some I will explain here:
+
+Search: Going through other channels from the channel listing for a quick jump – if you know the name of it.
+Channel List: Brings up the channel list inside the same category you are on.
+Recordings: Here is a good place to track your already scheduled recordings or the ongoing one.
+Multiview: If your account has more than 1 connection allowed, based on the amount of allowed connections, you can add extra screens and watch multiple channels together. I will dive deep into this soon.
+Picture-in-picture: You can minimize the Tivimate to the top right side of the screen and go to the home dashboard of your device, maybe check other applications in the meantime.
+Video Resolution: It shows which video resolution is set as default for the channel. Some streams do allow you to pick multiple e.g. 720p, 1080p and you can pick them from this section.
+Audio Channel/Mode: Same with the Audio, some channels do provide more than one audio channel/quality, here you can switch between them.
+Audio Offset: If you notice a syncing issue between audio and video, you can easily fix it here. This is usually fixable by reporting the matter to your IPTV provider, but if you rather fix it yourself or they cant do anything about it, this section comes handy.(Screenshot from 2026-05-11 10-47-01) and enhence display section shows and movies and enhence display app in s23 ultra sumsang and should work with mi box xiaomi and when i chhopse to record channel record live in my phone or android tv box and choose default folder for exemple download or give the user to choose folder in setting
