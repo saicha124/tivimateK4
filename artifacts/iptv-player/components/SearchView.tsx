@@ -1,8 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useRef, useMemo, useState } from "react";
+import React, { useCallback, useRef, useMemo, useState, useEffect } from "react";
 import {
+  Animated,
+  Easing,
   Platform,
   ScrollView,
   StyleSheet,
@@ -15,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Channel, EPGProgram, VODItem, useIPTV } from "@/context/IPTVContext";
 import { useColors } from "@/hooks/useColors";
+import { useVoiceSearch } from "@/hooks/useVoiceSearch";
 
 const MAX_PER_SECTION = 30;
 
@@ -34,6 +37,33 @@ export function SearchView({ onPlayChannel, onPlayVOD }: Props) {
   const { activePlaylist } = useIPTV();
   const [query, setQuery] = useState("");
   const inputRef = useRef<TextInput>(null);
+
+  // Voice search
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseLoop = useRef<Animated.CompositeAnimation | null>(null);
+
+  const handleVoiceResult = useCallback((text: string) => {
+    setQuery(text);
+  }, []);
+
+  const { isListening, isSupported, start: startVoice } = useVoiceSearch({
+    onResult: handleVoiceResult,
+  });
+
+  useEffect(() => {
+    if (isListening) {
+      pulseLoop.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.4, duration: 500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ])
+      );
+      pulseLoop.current.start();
+    } else {
+      pulseLoop.current?.stop();
+      pulseAnim.setValue(1);
+    }
+  }, [isListening, pulseAnim]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -124,6 +154,29 @@ export function SearchView({ onPlayChannel, onPlayVOD }: Props) {
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Feather name="x" size={18} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          )}
+          {/* Mic button — hidden if definitely unsupported */}
+          {isSupported !== false && (
+            <TouchableOpacity
+              onPress={startVoice}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.micBtn}
+              activeOpacity={0.7}
+            >
+              {isListening ? (
+                <Animated.View
+                  style={[
+                    styles.micRipple,
+                    { backgroundColor: "#e5393530", transform: [{ scale: pulseAnim }] },
+                  ]}
+                />
+              ) : null}
+              <Feather
+                name="mic"
+                size={18}
+                color={isListening ? "#e53935" : colors.mutedForeground}
+              />
             </TouchableOpacity>
           )}
         </View>
@@ -620,5 +673,19 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
+  },
+  // Mic button
+  micBtn: {
+    width: 32,
+    height: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+  },
+  micRipple: {
+    position: "absolute",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
 });
