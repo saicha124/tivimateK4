@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useMemo } from "react";
 import {
   Platform,
@@ -20,7 +21,7 @@ interface SidebarItem {
 }
 
 const ITEMS: SidebarItem[] = [
-  { section: "TV", icon: "tv", label: "TV" },
+  { section: "TV", icon: "tv", label: "Live TV" },
   { section: "Movies", icon: "film", label: "Movies" },
   { section: "Shows", icon: "grid", label: "Shows" },
   { section: "Search", icon: "search", label: "Search" },
@@ -61,7 +62,7 @@ export function Sidebar({ onSettings, onSwitchPlaylist }: SidebarProps) {
   }, [recordings, now]);
 
   const recordingsBadge = activeCount > 0 ? activeCount : scheduledCount > 0 ? scheduledCount : 0;
-  const recordingsBadgeColor = activeCount > 0 ? "#f44336" : colors.primary;
+  const recordingsBadgeColor = activeCount > 0 ? "#ef4444" : colors.primary;
 
   return (
     <View
@@ -76,12 +77,17 @@ export function Sidebar({ onSettings, onSwitchPlaylist }: SidebarProps) {
       ]}
     >
       {/* Logo */}
-      <View style={styles.logo}>
-        <Text style={[styles.logoBlue, { color: colors.primary }]}>tivi</Text>
-        <Text style={[styles.logoWhite, { color: colors.foreground }]}>mate</Text>
+      <View style={styles.logoRow}>
+        <View style={[styles.logoIcon, { backgroundColor: colors.primary }]}>
+          <Feather name="tv" size={13} color="#fff" />
+        </View>
+        <View style={styles.logoText}>
+          <Text style={[styles.logoBlue, { color: colors.primary }]}>tivi</Text>
+          <Text style={[styles.logoWhite, { color: colors.foreground }]}>mate</Text>
+        </View>
       </View>
 
-      {/* Active playlist badge — tap to switch */}
+      {/* Active playlist badge */}
       <TouchableOpacity
         onPress={() => {
           Haptics.selectionAsync();
@@ -90,19 +96,14 @@ export function Sidebar({ onSettings, onSwitchPlaylist }: SidebarProps) {
         style={[styles.playlistBadge, { backgroundColor: colors.secondary, borderColor: colors.border }]}
         activeOpacity={0.75}
       >
-        <View style={styles.playlistBadgeLeft}>
-          <View style={[styles.playlistDot, { backgroundColor: activePlaylist ? colors.primary : colors.mutedForeground }]} />
-          <Text
-            style={[
-              styles.playlistName,
-              { color: activePlaylist ? colors.foreground : colors.mutedForeground },
-            ]}
-            numberOfLines={1}
-          >
-            {activePlaylist?.name ?? "No playlist"}
-          </Text>
-        </View>
-        <Feather name="chevron-down" size={12} color={colors.mutedForeground} />
+        <View style={[styles.playlistDot, { backgroundColor: activePlaylist ? "#4ade80" : colors.mutedForeground }]} />
+        <Text
+          style={[styles.playlistName, { color: activePlaylist ? colors.foreground : colors.mutedForeground }]}
+          numberOfLines={1}
+        >
+          {activePlaylist?.name ?? "No playlist"}
+        </Text>
+        <Feather name="chevron-down" size={11} color={colors.mutedForeground} />
       </TouchableOpacity>
 
       {playlists.length > 1 && (
@@ -127,16 +128,24 @@ export function Sidebar({ onSettings, onSwitchPlaylist }: SidebarProps) {
                 Haptics.selectionAsync();
                 setCurrentSection(item.section);
               }}
-              style={[
-                styles.item,
-                active && { backgroundColor: colors.highlight },
-              ]}
               activeOpacity={0.7}
+              style={styles.itemWrap}
             >
-              <View style={{ position: "relative" }}>
+              {active && (
+                <LinearGradient
+                  colors={["#3d8ef018", "#3d8ef008"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              )}
+              {active && (
+                <View style={[styles.activeStripe, { backgroundColor: colors.primary }]} />
+              )}
+              <View style={[styles.iconWrap, active && { backgroundColor: `${colors.primary}18` }]}>
                 <Feather
                   name={item.icon}
-                  size={19}
+                  size={17}
                   color={active ? colors.primary : colors.mutedForeground}
                 />
                 {badge > 0 && (
@@ -151,15 +160,12 @@ export function Sidebar({ onSettings, onSwitchPlaylist }: SidebarProps) {
                   {
                     color: active ? colors.foreground : colors.mutedForeground,
                     fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular",
-                    flex: 1,
                   },
                 ]}
+                numberOfLines={1}
               >
                 {item.label}
               </Text>
-              {active && (
-                <View style={[styles.activeBar, { backgroundColor: colors.primary }]} />
-              )}
             </TouchableOpacity>
           );
         })}
@@ -172,10 +178,10 @@ export function Sidebar({ onSettings, onSwitchPlaylist }: SidebarProps) {
             Haptics.selectionAsync();
             onSettings();
           }}
-          style={styles.item}
+          style={styles.itemWrap}
           activeOpacity={0.7}
         >
-          <Feather name="settings" size={19} color={colors.mutedForeground} />
+          <Feather name="settings" size={17} color={colors.mutedForeground} />
           <Text style={[styles.itemLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
             Settings
           </Text>
@@ -187,41 +193,48 @@ export function Sidebar({ onSettings, onSwitchPlaylist }: SidebarProps) {
 
 const styles = StyleSheet.create({
   container: {
-    width: 130,
-    borderRightWidth: 1,
+    width: 148,
+    borderRightWidth: StyleSheet.hairlineWidth,
     flexDirection: "column",
   },
-  logo: {
+  logoRow: {
     flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 12,
-    paddingBottom: 10,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  logoIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  logoText: {
+    flexDirection: "row",
     alignItems: "center",
   },
   logoBlue: {
-    fontSize: 18,
+    fontSize: 17,
     fontFamily: "Inter_700Bold",
+    letterSpacing: -0.5,
   },
   logoWhite: {
-    fontSize: 18,
+    fontSize: 17,
     fontFamily: "Inter_700Bold",
+    letterSpacing: -0.5,
   },
   playlistBadge: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     marginHorizontal: 8,
     marginBottom: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
     borderRadius: 8,
-    borderWidth: 1,
-  },
-  playlistBadgeLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    flex: 1,
-    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 6,
   },
   playlistDot: {
     width: 6,
@@ -238,35 +251,53 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   divider: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     marginHorizontal: 12,
     marginBottom: 8,
-    marginTop: 4,
+    marginTop: 6,
   },
   navItems: {
     flex: 1,
-    gap: 1,
+    gap: 2,
   },
-  item: {
+  itemWrap: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 9,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    borderRadius: 4,
     marginHorizontal: 4,
+    borderRadius: 8,
+    overflow: "hidden",
+    position: "relative",
+  },
+  activeStripe: {
+    position: "absolute",
+    left: 4,
+    top: 7,
+    bottom: 7,
+    width: 3,
+    borderRadius: 2,
+  },
+  iconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    justifyContent: "center",
+    alignItems: "center",
     position: "relative",
   },
   itemLabel: {
     fontSize: 12,
+    flex: 1,
   },
   badge: {
     position: "absolute",
-    top: -4,
-    right: -5,
+    top: -3,
+    right: -3,
     minWidth: 14,
     height: 14,
     borderRadius: 7,
@@ -279,16 +310,8 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontFamily: "Inter_700Bold",
   },
-  activeBar: {
-    position: "absolute",
-    left: 0,
-    top: 6,
-    bottom: 6,
-    width: 3,
-    borderRadius: 2,
-  },
   footer: {
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 6,
     marginTop: 4,
   },

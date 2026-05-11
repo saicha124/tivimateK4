@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -46,28 +47,30 @@ export function NowNextBar({ onPlay }: NowNextBarProps) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-      {/* Channel identity strip */}
+      {/* Channel strip */}
       <View style={[styles.channelStrip, { borderBottomColor: colors.border }]}>
-        <View style={[styles.logoWrap, { backgroundColor: colors.secondary }]}>
+        <View style={[styles.logoWrap, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
           {selectedChannel.logo ? (
             <Image source={{ uri: selectedChannel.logo }} style={styles.logo} contentFit="contain" />
           ) : (
-            <Feather name="tv" size={14} color={colors.mutedForeground} />
+            <Feather name="tv" size={13} color={colors.mutedForeground} />
           )}
         </View>
-        <Text style={[styles.channelName, { color: colors.mutedForeground }]} numberOfLines={1}>
-          {selectedChannel.name}
-        </Text>
-        <Text style={[styles.groupName, { color: colors.mutedForeground }]} numberOfLines={1}>
-          · {selectedChannel.group}
-        </Text>
+        <View style={styles.channelInfo}>
+          <Text style={[styles.channelName, { color: colors.foreground }]} numberOfLines={1}>
+            {selectedChannel.name}
+          </Text>
+          <Text style={[styles.groupName, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {selectedChannel.group}
+          </Text>
+        </View>
         <TouchableOpacity
           onPress={onPlay}
           style={[styles.playBtn, { backgroundColor: colors.primary }]}
           activeOpacity={0.85}
         >
-          <Feather name="play" size={12} color="#fff" />
-          <Text style={styles.playBtnText}>Watch</Text>
+          <Feather name="play" size={11} color="#fff" />
+          <Text style={styles.playBtnText}>Watch now</Text>
         </TouchableOpacity>
       </View>
 
@@ -76,8 +79,10 @@ export function NowNextBar({ onPlay }: NowNextBarProps) {
         {/* NOW */}
         <View style={[styles.panel, styles.nowPanel, { borderRightColor: colors.border }]}>
           <View style={styles.panelHeader}>
-            <View style={styles.nowDot} />
-            <Text style={[styles.panelLabel, { color: colors.primary }]}>NOW</Text>
+            <View style={styles.nowPill}>
+              <View style={styles.nowDot} />
+              <Text style={[styles.panelLabel, { color: "#4ade80" }]}>LIVE</Text>
+            </View>
             {current && (
               <Text style={[styles.panelTime, { color: colors.mutedForeground }]}>
                 {fmt(current.startTime)} — {fmt(current.endTime)}
@@ -95,8 +100,11 @@ export function NowNextBar({ onPlay }: NowNextBarProps) {
                 </Text>
               ) : null}
               <View style={[styles.progressTrack, { backgroundColor: colors.progressBg }]}>
-                <View
-                  style={[styles.progressFill, { backgroundColor: colors.primary, width: `${pct * 100}%` as any }]}
+                <LinearGradient
+                  colors={[colors.primary, `${colors.primary}cc`]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.progressFill, { width: `${pct * 100}%` as any }]}
                 />
               </View>
               <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>
@@ -104,15 +112,17 @@ export function NowNextBar({ onPlay }: NowNextBarProps) {
               </Text>
             </>
           ) : (
-            <Text style={[styles.noProgram, { color: colors.mutedForeground }]}>No info</Text>
+            <Text style={[styles.noProgram, { color: colors.mutedForeground }]}>No EPG info</Text>
           )}
         </View>
 
         {/* NEXT */}
         <View style={[styles.panel, styles.nextPanel]}>
           <View style={styles.panelHeader}>
-            <Feather name="skip-forward" size={10} color={colors.mutedForeground} />
-            <Text style={[styles.panelLabel, { color: colors.mutedForeground }]}>NEXT</Text>
+            <View style={[styles.nextPill, { backgroundColor: `${colors.mutedForeground}18` }]}>
+              <Feather name="skip-forward" size={9} color={colors.mutedForeground} />
+              <Text style={[styles.panelLabel, { color: colors.mutedForeground }]}>UP NEXT</Text>
+            </View>
             {next && (
               <Text style={[styles.panelTime, { color: colors.mutedForeground }]}>
                 {fmt(next.startTime)}
@@ -130,7 +140,7 @@ export function NowNextBar({ onPlay }: NowNextBarProps) {
                 </Text>
               ) : null}
               <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>
-                Starts in {fmtDur(Date.now(), next.startTime)} · {fmtDur(next.startTime, next.endTime)}
+                In {fmtDur(Date.now(), next.startTime)} · {fmtDur(next.startTime, next.endTime)}
               </Text>
             </>
           ) : (
@@ -144,43 +154,46 @@ export function NowNextBar({ onPlay }: NowNextBarProps) {
 
 const styles = StyleSheet.create({
   container: {
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   channelStrip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
     paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   logoWrap: {
-    width: 28,
-    height: 20,
-    borderRadius: 3,
+    width: 36,
+    height: 24,
+    borderRadius: 4,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    flexShrink: 0,
   },
-  logo: { width: 28, height: 20 },
+  logo: { width: 36, height: 24 },
+  channelInfo: {
+    flex: 1,
+    gap: 1,
+  },
   channelName: {
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
-    flexShrink: 1,
   },
   groupName: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: "Inter_400Regular",
-    flexShrink: 1,
-    flex: 1,
   },
   playBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   playBtnText: {
     fontSize: 11,
@@ -202,19 +215,36 @@ const styles = StyleSheet.create({
   panelHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    marginBottom: 2,
+    gap: 6,
+    marginBottom: 3,
+  },
+  nowPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#4ade8018",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  nextPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 20,
   },
   nowDot: {
-    width: 6,
-    height: 6,
+    width: 5,
+    height: 5,
     borderRadius: 3,
-    backgroundColor: "#4caf50",
+    backgroundColor: "#4ade80",
   },
   panelLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: "Inter_700Bold",
-    letterSpacing: 0.8,
+    letterSpacing: 1,
   },
   panelTime: {
     fontSize: 10,
@@ -232,13 +262,13 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   progressTrack: {
-    height: 3,
+    height: 4,
     borderRadius: 2,
     marginTop: 4,
     overflow: "hidden",
   },
   progressFill: {
-    height: 3,
+    height: 4,
     borderRadius: 2,
   },
   progressLabel: {

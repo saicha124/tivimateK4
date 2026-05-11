@@ -71,6 +71,7 @@ export function GroupList({
   );
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const handleSelect = (group: string) => {
     if (isGroupLocked(group)) {
@@ -126,6 +127,7 @@ export function GroupList({
         keyExtractor={(item) => item.key}
         scrollEnabled={listData.length > 0}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: bottomPad + 8, paddingHorizontal: 6 }}
         renderItem={({ item }) => {
           if (item.isFavHeader) {
             const active = selectedGroup === "__favorites__";
@@ -134,16 +136,18 @@ export function GroupList({
                 onPress={() => handleSelect("__favorites__")}
                 style={[
                   styles.groupItem,
-                  active && { backgroundColor: colors.highlight },
+                  { borderColor: "transparent" },
+                  active && { backgroundColor: colors.highlight, borderColor: `${colors.primary}30` },
                 ]}
                 activeOpacity={0.7}
               >
-                <Feather name="star" size={12} color="#FFC107" style={{ marginRight: 4 }} />
+                {active && <View style={[styles.activeStripe, { backgroundColor: "#fbbf24" }]} />}
+                <Feather name="star" size={11} color="#fbbf24" style={{ marginRight: 3 }} />
                 <Text
                   style={[
                     styles.groupText,
                     {
-                      color: active ? colors.primary : colors.foreground,
+                      color: active ? colors.foreground : colors.foreground,
                       fontFamily: active ? "Inter_600SemiBold" : "Inter_500Medium",
                       flex: 1,
                     },
@@ -166,15 +170,17 @@ export function GroupList({
               onLongPress={() => handleLongPress(group)}
               style={[
                 styles.groupItem,
-                active && { backgroundColor: colors.highlight },
+                { borderColor: "transparent" },
+                active && { backgroundColor: colors.highlight, borderColor: `${colors.primary}30` },
               ]}
               activeOpacity={0.7}
             >
+              {active && <View style={[styles.activeStripe, { backgroundColor: colors.primary }]} />}
               <Text
                 style={[
                   styles.groupText,
                   {
-                    color: active ? colors.primary : locked ? colors.mutedForeground : colors.foreground,
+                    color: active ? colors.foreground : locked ? colors.mutedForeground : colors.secondaryForeground,
                     fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular",
                     flex: 1,
                   },
@@ -184,10 +190,10 @@ export function GroupList({
                 {group}
               </Text>
               {favOnly && (
-                <Feather name="star" size={11} color="#FFC107" style={{ marginLeft: 2 }} />
+                <Feather name="star" size={10} color="#fbbf24" style={{ marginLeft: 2 }} />
               )}
               {locked && (
-                <Feather name="lock" size={12} color={colors.destructive} style={{ marginLeft: 4 }} />
+                <Feather name="lock" size={11} color={colors.destructive} style={{ marginLeft: 4 }} />
               )}
             </TouchableOpacity>
           );
@@ -227,27 +233,38 @@ export function GroupList({
 
 const styles = StyleSheet.create({
   container: {
-    width: 180,
-    borderRightWidth: 1,
+    width: 186,
+    borderRightWidth: StyleSheet.hairlineWidth,
   },
   header: {
-    fontSize: 10,
-    letterSpacing: 1.5,
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 9,
+    letterSpacing: 1.8,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    fontFamily: "Inter_700Bold",
   },
   groupItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 2,
-    marginHorizontal: 4,
+    paddingVertical: 9,
+    borderRadius: 8,
     marginBottom: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    position: "relative",
+    overflow: "hidden",
+  },
+  activeStripe: {
+    position: "absolute",
+    left: 0,
+    top: 6,
+    bottom: 6,
+    width: 3,
+    borderRadius: 2,
   },
   groupText: {
-    fontSize: 13,
+    fontSize: 12.5,
+    paddingLeft: 6,
   },
   empty: { padding: 16 },
   emptyText: { fontSize: 13 },

@@ -118,7 +118,7 @@ export function ChannelList({
     <>
       {manageFavoritesMode && (
         <View style={[styles.manageBanner, { backgroundColor: colors.highlight, borderBottomColor: colors.primary }]}>
-          <Feather name="star" size={14} color="#FFC107" />
+          <Feather name="star" size={14} color="#fbbf24" />
           <Text style={[styles.manageBannerText, { color: colors.foreground }]}>
             Manage Favorites — tap a star to add or remove
           </Text>
@@ -152,13 +152,12 @@ export function ChannelList({
                 style={[
                   styles.manageItem,
                   { borderBottomColor: colors.border },
-                  isBlocked && { opacity: 0.45 },
+                  isBlocked && { opacity: 0.4 },
                 ]}
               >
                 <View style={styles.indexContainer}>
                   <Text style={[styles.index, { color: colors.mutedForeground }]}>{index + 1}</Text>
                 </View>
-
                 <View style={[styles.logo, { backgroundColor: colors.secondary }]}>
                   {channel.logo ? (
                     <Image source={{ uri: channel.logo }} style={styles.logoImg} contentFit="contain" />
@@ -166,7 +165,6 @@ export function ChannelList({
                     <Feather name="tv" size={18} color={colors.mutedForeground} />
                   )}
                 </View>
-
                 <TouchableOpacity
                   style={styles.starColumn}
                   onPress={() => {
@@ -178,24 +176,17 @@ export function ChannelList({
                   <Feather
                     name="star"
                     size={22}
-                    color={isFav ? "#FFC107" : colors.mutedForeground}
-                    style={isFav ? { opacity: 1 } : { opacity: 0.4 }}
+                    color={isFav ? "#fbbf24" : colors.mutedForeground}
+                    style={isFav ? { opacity: 1 } : { opacity: 0.35 }}
                   />
                 </TouchableOpacity>
-
                 <View style={styles.info}>
                   <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
                     {channel.name}
                   </Text>
-                  {now ? (
-                    <Text style={[styles.program, { color: colors.mutedForeground }]} numberOfLines={1}>
-                      {now.title}
-                    </Text>
-                  ) : (
-                    <Text style={[styles.program, { color: colors.mutedForeground }]} numberOfLines={1}>
-                      {channel.group}
-                    </Text>
-                  )}
+                  <Text style={[styles.program, { color: colors.mutedForeground }]} numberOfLines={1}>
+                    {now ? now.title : channel.group}
+                  </Text>
                 </View>
               </View>
             );
@@ -211,15 +202,18 @@ export function ChannelList({
               style={[
                 styles.item,
                 active && { backgroundColor: colors.highlight },
-                isBlocked && { opacity: 0.45 },
+                isBlocked && { opacity: 0.4 },
                 { borderBottomColor: colors.border },
               ]}
-              activeOpacity={0.8}
+              activeOpacity={0.75}
             >
+              {active && (
+                <View style={[styles.activeStripe, { backgroundColor: colors.primary }]} />
+              )}
               <View style={styles.indexContainer}>
                 <Text style={[styles.index, { color: colors.mutedForeground }]}>{index + 1}</Text>
               </View>
-              <View style={[styles.logo, { backgroundColor: colors.secondary }]}>
+              <View style={[styles.logo, { backgroundColor: colors.secondary, borderColor: active ? `${colors.primary}40` : colors.border }]}>
                 {channel.logo ? (
                   <Image source={{ uri: channel.logo }} style={styles.logoImg} contentFit="contain" />
                 ) : (
@@ -228,22 +222,36 @@ export function ChannelList({
               </View>
               <View style={styles.info}>
                 <View style={styles.nameRow}>
-                  <Text style={[styles.name, { color: active ? colors.primary : isBlocked ? colors.destructive : colors.foreground }]} numberOfLines={1}>
+                  <Text
+                    style={[
+                      styles.name,
+                      { color: active ? colors.primary : isBlocked ? colors.destructive : colors.foreground },
+                    ]}
+                    numberOfLines={1}
+                  >
                     {channel.name}
                   </Text>
                   {isBlocked && (
-                    <View style={[styles.badge, { backgroundColor: `${colors.destructive}22` }]}>
+                    <View style={[styles.badge, { backgroundColor: `${colors.destructive}20` }]}>
                       <Text style={[styles.badgeText, { color: colors.destructive }]}>BLOCKED</Text>
                     </View>
                   )}
                 </View>
                 {now ? (
                   <>
-                    <Text style={[styles.program, { color: colors.mutedForeground }]} numberOfLines={1}>
-                      {now.title}
-                    </Text>
+                    <View style={styles.programRow}>
+                      <View style={styles.liveDot} />
+                      <Text style={[styles.program, { color: colors.mutedForeground }]} numberOfLines={1}>
+                        {now.title}
+                      </Text>
+                    </View>
                     <View style={[styles.progressBar, { backgroundColor: colors.progressBg }]}>
-                      <View style={[styles.progressFill, { backgroundColor: colors.progressFg, width: `${prog * 100}%` }]} />
+                      <View
+                        style={[
+                          styles.progressFill,
+                          { backgroundColor: active ? colors.primary : `${colors.primary}80`, width: `${prog * 100}%` as any },
+                        ]}
+                      />
                     </View>
                   </>
                 ) : (
@@ -256,8 +264,9 @@ export function ChannelList({
                 <TouchableOpacity
                   onPress={() => onPlayChannel(channel)}
                   style={[styles.playBtn, { backgroundColor: colors.primary }]}
+                  activeOpacity={0.85}
                 >
-                  <Feather name="play" size={14} color="#fff" />
+                  <Feather name="play" size={13} color="#fff" />
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -268,7 +277,7 @@ export function ChannelList({
                 style={styles.favBtn}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Feather name="star" size={16} color={isFav ? "#FFC107" : colors.mutedForeground} />
+                <Feather name="star" size={15} color={isFav ? "#fbbf24" : colors.mutedForeground} />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleLongPress(channel)}
@@ -282,7 +291,7 @@ export function ChannelList({
         }}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Feather name="tv" size={40} color={colors.mutedForeground} style={{ marginBottom: 12 }} />
+            <Feather name="tv" size={38} color={colors.mutedForeground} style={{ marginBottom: 12 }} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No channels</Text>
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
               {manageFavoritesMode
@@ -328,7 +337,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
   },
-
   manageItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -342,38 +350,48 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   item: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 11,
     paddingHorizontal: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 8,
+    position: "relative",
+    overflow: "hidden",
+  },
+  activeStripe: {
+    position: "absolute",
+    left: 0,
+    top: 8,
+    bottom: 8,
+    width: 3,
+    borderRadius: 2,
   },
   indexContainer: {
     width: 24,
     alignItems: "center",
   },
   index: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: "Inter_400Regular",
   },
   logo: {
-    width: 44,
-    height: 32,
-    borderRadius: 4,
+    width: 50,
+    height: 34,
+    borderRadius: 5,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
   },
   logoImg: {
-    width: 44,
-    height: 32,
+    width: 50,
+    height: 34,
   },
   info: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   nameRow: {
     flexDirection: "row",
@@ -395,24 +413,36 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     letterSpacing: 0.5,
   },
+  programRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  liveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#4ade80",
+    flexShrink: 0,
+  },
   program: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
+    flex: 1,
   },
   progressBar: {
-    height: 2,
-    borderRadius: 1,
-    marginTop: 2,
+    height: 3,
+    borderRadius: 2,
     overflow: "hidden",
   },
   progressFill: {
-    height: 2,
-    borderRadius: 1,
+    height: 3,
+    borderRadius: 2,
   },
   playBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
   },
