@@ -9,6 +9,7 @@ import {
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -76,12 +77,17 @@ export function ChannelList({
   const [contextChannel, setContextChannel] = useState<Channel | null>(null);
   const [viewLayout, setViewLayout] = useState<ViewLayout>("list");
   const [containerWidth, setContainerWidth] = useState(0);
+  const [filterQuery, setFilterQuery] = useState("");
 
   useEffect(() => {
     AsyncStorage.getItem(LAYOUT_STORAGE_KEY).then((v) => {
       if (v === "grid" || v === "list") setViewLayout(v);
     });
   }, []);
+
+  useEffect(() => {
+    setFilterQuery("");
+  }, [selectedGroup, currentSection]);
 
   const switchLayout = (next: ViewLayout) => {
     Haptics.selectionAsync();
@@ -147,6 +153,12 @@ export function ChannelList({
     }
     return [];
   }, [currentSection, selectedGroup, channels, movies, shows, favorites, hiddenChannels, favoritesOnlyGroups, manageFavoritesMode]);
+
+  const filteredItems = useMemo(() => {
+    if (!filterQuery.trim()) return items;
+    const q = filterQuery.trim().toLowerCase();
+    return items.filter((c) => c.name.toLowerCase().includes(q));
+  }, [items, filterQuery]);
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -406,9 +418,12 @@ export function ChannelList({
   return (
     <View style={styles.root} onLayout={onLayout}>
       {!manageFavoritesMode && (
+        <>
         <View style={[styles.toolbar, { borderBottomColor: colors.border, backgroundColor: colors.sidebar }]}>
           <Text style={[styles.toolbarCount, { color: colors.mutedForeground }]}>
-            {items.length} {items.length === 1 ? "channel" : "channels"}
+            {filterQuery.trim()
+              ? `${filteredItems.length} / ${items.length}`
+              : `${items.length} ${items.length === 1 ? "channel" : "channels"}`}
           </Text>
           <View style={[styles.layoutToggle, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
             <TouchableOpacity
@@ -441,6 +456,31 @@ export function ChannelList({
             </TouchableOpacity>
           </View>
         </View>
+
+        <View style={[styles.searchBar, { backgroundColor: colors.secondary, borderBottomColor: colors.border }]}>
+          <Feather name="search" size={14} color={colors.mutedForeground} style={styles.searchIcon} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.foreground }]}
+            placeholder="Filter channels…"
+            placeholderTextColor={colors.mutedForeground}
+            value={filterQuery}
+            onChangeText={setFilterQuery}
+            autoCorrect={false}
+            autoCapitalize="none"
+            clearButtonMode="never"
+            returnKeyType="search"
+          />
+          {filterQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setFilterQuery("")}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.searchClear}
+            >
+              <Feather name="x" size={13} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          )}
+        </View>
+        </>
       )}
 
       {manageFavoritesMode && (
@@ -462,7 +502,7 @@ export function ChannelList({
       {viewLayout === "grid" && !manageFavoritesMode ? (
         <FlatList
           key={`grid-${numColumns}`}
-          data={items}
+          data={filteredItems}
           keyExtractor={(item) => item.id}
           numColumns={numColumns}
           scrollEnabled={!!items.length}
@@ -488,7 +528,7 @@ export function ChannelList({
       ) : (
         <FlatList
           key="list-1"
-          data={items}
+          data={filteredItems}
           keyExtractor={(item) => item.id}
           scrollEnabled={!!items.length}
           showsVerticalScrollIndicator={false}
@@ -530,6 +570,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 6,
+  },
+  searchIcon: {
+    flexShrink: 0,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    paddingVertical: Platform.OS === "ios" ? 4 : 2,
+    height: 28,
+  },
+  searchClear: {
+    padding: 2,
+    flexShrink: 0,
   },
   toolbarCount: {
     fontSize: 11,
