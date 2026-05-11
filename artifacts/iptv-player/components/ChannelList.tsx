@@ -20,12 +20,26 @@ import { Channel, EPGProgram, useIPTV } from "@/context/IPTVContext";
 import { useColors } from "@/hooks/useColors";
 
 type ViewLayout = "list" | "grid";
+type SortOrder = "default" | "name-asc" | "name-desc";
 
 const GRID_ITEM_MIN_WIDTH = 110;
 const GRID_ASPECT = 9 / 16;
 const GRID_GAP = 4;
 const GRID_PADDING = 4;
 const LAYOUT_STORAGE_KEY = "channelListViewLayout";
+const SORT_STORAGE_KEY = "channelListSortOrder";
+
+const SORT_CYCLE: SortOrder[] = ["default", "name-asc", "name-desc"];
+const SORT_ICON: Record<SortOrder, React.ComponentProps<typeof Feather>["name"]> = {
+  default: "list",
+  "name-asc": "arrow-up",
+  "name-desc": "arrow-down",
+};
+const SORT_LABEL: Record<SortOrder, string> = {
+  default: "Default",
+  "name-asc": "A → Z",
+  "name-desc": "Z → A",
+};
 
 function nowProgram(channel: Channel, stalkerEpg?: EPGProgram[]) {
   const now = Date.now();
@@ -78,10 +92,14 @@ export function ChannelList({
   const [viewLayout, setViewLayout] = useState<ViewLayout>("list");
   const [containerWidth, setContainerWidth] = useState(0);
   const [filterQuery, setFilterQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("default");
 
   useEffect(() => {
     AsyncStorage.getItem(LAYOUT_STORAGE_KEY).then((v) => {
       if (v === "grid" || v === "list") setViewLayout(v);
+    });
+    AsyncStorage.getItem(SORT_STORAGE_KEY).then((v) => {
+      if (v === "default" || v === "name-asc" || v === "name-desc") setSortOrder(v);
     });
   }, []);
 
@@ -93,6 +111,13 @@ export function ChannelList({
     Haptics.selectionAsync();
     setViewLayout(next);
     AsyncStorage.setItem(LAYOUT_STORAGE_KEY, next);
+  };
+
+  const cycleSortOrder = () => {
+    Haptics.selectionAsync();
+    const next = SORT_CYCLE[(SORT_CYCLE.indexOf(sortOrder) + 1) % SORT_CYCLE.length];
+    setSortOrder(next);
+    AsyncStorage.setItem(SORT_STORAGE_KEY, next);
   };
 
   const onLayout = (e: LayoutChangeEvent) => {
@@ -155,10 +180,18 @@ export function ChannelList({
   }, [currentSection, selectedGroup, channels, movies, shows, favorites, hiddenChannels, favoritesOnlyGroups, manageFavoritesMode]);
 
   const filteredItems = useMemo(() => {
-    if (!filterQuery.trim()) return items;
-    const q = filterQuery.trim().toLowerCase();
-    return items.filter((c) => c.name.toLowerCase().includes(q));
-  }, [items, filterQuery]);
+    let list = items;
+    if (filterQuery.trim()) {
+      const q = filterQuery.trim().toLowerCase();
+      list = list.filter((c) => c.name.toLowerCase().includes(q));
+    }
+    if (sortOrder === "name-asc") {
+      list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortOrder === "name-desc") {
+      list = [...list].sort((a, b) => b.name.localeCompare(a.name));
+    }
+    return list;
+  }, [items, filterQuery, sortOrder]);
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -425,35 +458,64 @@ export function ChannelList({
               ? `${filteredItems.length} / ${items.length}`
               : `${items.length} ${items.length === 1 ? "channel" : "channels"}`}
           </Text>
-          <View style={[styles.layoutToggle, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+          <View style={styles.toolbarRight}>
             <TouchableOpacity
-              onPress={() => switchLayout("list")}
+              onPress={cycleSortOrder}
               style={[
-                styles.layoutBtn,
-                viewLayout === "list" && { backgroundColor: colors.primary },
+                styles.sortBtn,
+                {
+                  backgroundColor: sortOrder !== "default" ? colors.primary : colors.secondary,
+                  borderColor: sortOrder !== "default" ? colors.primary : colors.border,
+                },
               ]}
               activeOpacity={0.7}
+              accessibilityLabel={`Sort: ${SORT_LABEL[sortOrder]}`}
             >
               <Feather
-                name="list"
-                size={14}
-                color={viewLayout === "list" ? "#fff" : colors.mutedForeground}
+                name={SORT_ICON[sortOrder]}
+                size={12}
+                color={sortOrder !== "default" ? "#fff" : colors.mutedForeground}
               />
+              <Text
+                style={[
+                  styles.sortBtnLabel,
+                  { color: sortOrder !== "default" ? "#fff" : colors.mutedForeground },
+                ]}
+              >
+                {SORT_LABEL[sortOrder]}
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => switchLayout("grid")}
-              style={[
-                styles.layoutBtn,
-                viewLayout === "grid" && { backgroundColor: colors.primary },
-              ]}
-              activeOpacity={0.7}
-            >
-              <Feather
-                name="grid"
-                size={14}
-                color={viewLayout === "grid" ? "#fff" : colors.mutedForeground}
-              />
-            </TouchableOpacity>
+
+            <View style={[styles.layoutToggle, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+              <TouchableOpacity
+                onPress={() => switchLayout("list")}
+                style={[
+                  styles.layoutBtn,
+                  viewLayout === "list" && { backgroundColor: colors.primary },
+                ]}
+                activeOpacity={0.7}
+              >
+                <Feather
+                  name="list"
+                  size={14}
+                  color={viewLayout === "list" ? "#fff" : colors.mutedForeground}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => switchLayout("grid")}
+                style={[
+                  styles.layoutBtn,
+                  viewLayout === "grid" && { backgroundColor: colors.primary },
+                ]}
+                activeOpacity={0.7}
+              >
+                <Feather
+                  name="grid"
+                  size={14}
+                  color={viewLayout === "grid" ? "#fff" : colors.mutedForeground}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -596,6 +658,25 @@ const styles = StyleSheet.create({
   toolbarCount: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
+    flex: 1,
+  },
+  toolbarRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  sortBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  sortBtnLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
   },
   layoutToggle: {
     flexDirection: "row",
