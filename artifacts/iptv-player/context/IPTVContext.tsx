@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { Platform } from "react-native";
 
 export type PlaylistType = "M3U" | "XtreamCodes" | "StalkerPortal";
 
@@ -253,20 +254,54 @@ async function fetchXtreamCodes(
   return parseM3U(text);
 }
 
-function getStalkerProxyBase(): string {
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  if (domain) return `https://${domain}/api`;
-  return "/api";
+function buildStalkerDirectUrl(portal: string, params: Record<string, string>): string {
+  const base = portal.replace(/\/+$/, "");
+  const qs = new URLSearchParams({ ...params, JsHttpRequest: "1-xml" });
+  return `${base}/server/load.php?${qs}`;
+}
+
+function stalkerMagHeaders(mac: string, token?: string): Record<string, string> {
+  const h: Record<string, string> = {
+    Cookie: `mac=${mac}; stb_lang=en; timezone=America%2FNew_York`,
+    "X-User-Agent": "Model: MAG250; Link: WiFi",
+    "User-Agent": "Mozilla/5.0 (QtEmbedded; U; Linux; C)",
+    Accept: "application/json",
+  };
+  if (token) h["Authorization"] = `Bearer ${token}`;
+  return h;
 }
 
 async function stalkerCall(
-  proxyBase: string,
+  _proxyBase: string,
   portal: string,
   mac: string,
   token: string | undefined,
   params: Record<string, string>
 ): Promise<any> {
+  if (Platform.OS !== "web") {
+    // On native (Android/iOS) there is no CORS restriction — call the portal directly
+    // with the proper MAG STB headers, exactly as the Express proxy does.
+    const url = buildStalkerDirectUrl(portal, params);
+    const resp = await fetch(url, {
+      headers: stalkerMagHeaders(mac, token),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!resp.ok) throw new Error(`Stalker portal error: ${resp.status}`);
+    const text = await resp.text();
+    if (!text.trim()) return { js: null };
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { js: null };
+    }
+  }
+
+  // On web, CORS blocks direct portal calls — route through the Express proxy.
   const qs = new URLSearchParams({ portal, mac, ...(token ? { token } : {}), ...params });
+  const proxyBase = _proxyBase || (() => {
+    const domain = process.env.EXPO_PUBLIC_DOMAIN;
+    return domain ? `https://${domain}/api` : "/api";
+  })();
   const resp = await fetch(`${proxyBase}/stalker/proxy?${qs}`);
   if (!resp.ok) throw new Error(`Stalker proxy error: ${resp.status}`);
   return resp.json();
@@ -277,7 +312,7 @@ async function fetchStalkerPortal(
   mac: string,
   onProgress: (msg: string) => void
 ): Promise<{ channels: Channel[]; movies: VODItem[]; shows: VODItem[]; token: string }> {
-  const proxyBase = getStalkerProxyBase();
+  const proxyBase = "";
   const BATCH = 15;
 
   onProgress("Authenticating with portal...");
@@ -640,7 +675,7 @@ export function IPTVProvider({ children }: { children: React.ReactNode }) {
       throw new Error("Invalid Stalker playlist configuration");
     }
 
-    const proxyBase = getStalkerProxyBase();
+    const proxyBase = "";
 
     let token = playlist.stalkerToken;
     if (!token) {
@@ -723,7 +758,7 @@ export function IPTVProvider({ children }: { children: React.ReactNode }) {
     setStalkerEpgLoading(true);
 
     try {
-      const proxyBase = getStalkerProxyBase();
+      const proxyBase = "";
 
       let token = playlist.stalkerToken;
       if (!token) {
