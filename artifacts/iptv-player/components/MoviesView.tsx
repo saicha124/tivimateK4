@@ -2,13 +2,14 @@ import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import React, { useMemo, useState } from "react";
+import React, { useRef, useMemo, useState } from "react";
 import {
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -240,6 +241,14 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
 
   const [selectedCat, setSelectedCat] = useState<string>("All movies");
   const [selectedMovie, setSelectedMovie] = useState<VODItem | null>(movies[0] ?? null);
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<TextInput>(null);
+
+  const searchResults = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return null;
+    return movies.filter((m) => m.name.toLowerCase().includes(q));
+  }, [query, movies]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -347,12 +356,67 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
           />
         )}
 
+        {/* Search bar */}
+        <View style={[styles.searchBar, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+          <Feather name="search" size={14} color={colors.mutedForeground} />
+          <TextInput
+            ref={inputRef}
+            style={[styles.searchInput, { color: colors.foreground }]}
+            placeholder="Search movies…"
+            placeholderTextColor={colors.mutedForeground}
+            value={query}
+            onChangeText={setQuery}
+            returnKeyType="search"
+            clearButtonMode="never"
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {query.length > 0 && (
+            <TouchableOpacity
+              onPress={() => { setQuery(""); inputRef.current?.blur(); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Feather name="x" size={14} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* Movie grid */}
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: bottomPad + 16, paddingTop: 8 }}
         >
-          {groupedCats ? (
+          {searchResults !== null ? (
+            /* ── Search results ── */
+            <View style={styles.flatGrid}>
+              {searchResults.length === 0 ? (
+                <View style={styles.emptyFilter}>
+                  <Feather name="search" size={36} color={colors.mutedForeground} style={{ marginBottom: 10 }} />
+                  <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No results</Text>
+                  <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                    No movies match "{query}"
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={[styles.searchCount, { color: colors.mutedForeground }]}>
+                    {searchResults.length} {searchResults.length === 1 ? "result" : "results"}
+                  </Text>
+                  <View style={styles.posterGrid}>
+                    {searchResults.map((item) => (
+                      <PosterCard
+                        key={item.id}
+                        item={item}
+                        selected={selectedMovie?.id === item.id}
+                        onPress={() => { Haptics.selectionAsync(); setSelectedMovie(item); }}
+                      />
+                    ))}
+                  </View>
+                </>
+              )}
+            </View>
+          ) : groupedCats ? (
+            /* ── Grouped "All movies" view ── */
             groupedCats.map((cat) => (
               <View key={cat} style={styles.catGroup}>
                 <View style={styles.catGroupHeader}>
@@ -385,6 +449,7 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
               </View>
             ))
           ) : (
+            /* ── Category filtered view ── */
             <View style={styles.flatGrid}>
               {filteredMovies.length === 0 ? (
                 <View style={styles.emptyFilter}>
@@ -606,7 +671,33 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
-  // ── Poster grid ───────────────────────────────────────────────────────────
+  // ── Search bar ────────────────────────────────────────────────────────────
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 10,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    paddingVertical: 0,
+  },
+  searchCount: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+  },
+
+  // ── Poster grid ────────────────────────────────────────────────────────────
   catGroup: {
     marginBottom: 20,
   },
