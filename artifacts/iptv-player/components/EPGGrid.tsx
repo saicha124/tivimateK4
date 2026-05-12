@@ -331,7 +331,7 @@ export function EPGGrid({ onPlayChannel, onCatchUp, onGoToRecordings }: EPGGridP
         </TouchableOpacity>
 
         <ScrollView
-          ref={(ref) => rowScrollRefs.current.set(channel.id, ref)}
+          ref={(ref) => { rowScrollRefs.current.set(channel.id, ref); }}
           horizontal
           showsHorizontalScrollIndicator={false}
           scrollEventThrottle={16}

@@ -1,0 +1,44 @@
+How to use Multi-view on Tivimate premium? (Multi screen)
+If your IPTV account has more than 1 connection, you can watch multiple channels at once thanks to the Multi-view function which you may also know as multi screen.
+
+clicking multiview from bottom menu bar while on full screen.
+1- While on full screen mode, click and hold OK button until the bottom menu bar appears. Then choose Multiview.
+
+
+clicking ok to be able to see the menu to add extra screens
+2- Tap OK once so the menu window appears.
+
+
+clicking add screen
+3- Click Add Screen.
+
+
+choose another channel
+4- Once the channel list appears, you can choose another station to add it in Multiview. If the categories don’t show up at first, simply click the leftward button on the remote to see it on Tivimate IPTV player. Touch screen users can use the back button or slide-in from the left edge of the screen.
+
+
+two channels added and being watched in multiview on tivimate
+5- We have added a second channel side-by-side to the original station which we were watching. Now we can enjoy viewing 2 channels at once.
+
+You can see on the right screen there is a bright frame, that confirms it is the channel having the audio on. On multi screen mode you can only hear 1 channel. If you want to change that, simply move the frame to other screens.
+
+
+Extra settings for Multiview
+extra options while on multiview mode
+6- While in multiview, clicking OK will bring up extra options:
+
+Add Screen: Allows you to add more screens on Tivimate Premium player.
+Search and Add: You can search for a channel name and add it instead of going through categories and listing
+Change Channel: Changes the channel on the screen which is highlighted.
+Pause: Stops the streaming on the selected screen.
+Enlarge Screen: Maximizes the size of the selected channel and minimizes others.
+Full Screen: Full screen mode for the selected one.
+Remove Screen: Deletes the selected channel from Multiview.
+
+
+one of the screens has been enlarged
+7- For instance here, I have used the Enlarge option on one of the screen and set it to have the audio.
+
+
+you can add up to 9 screens on tivimate
+8- Tivimate premium allows you to add up to 9 screens.

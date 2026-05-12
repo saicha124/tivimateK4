@@ -79,7 +79,7 @@ export function GroupContextMenu({ group, visible, onClose, onManageFavorites, o
     },
     {
       label: isHidden ? "Show group" : "Hide group",
-      icon: (isHidden ? "eye" : "eye-off") as const,
+      icon: (isHidden ? "eye" : "eye-off") as "eye" | "eye-off",
       action: () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         toggleHideGroup(group);
