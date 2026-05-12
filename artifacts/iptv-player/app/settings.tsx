@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -247,6 +247,30 @@ export default function SettingsScreen() {
   });
 
   const [isUpdatingEpg, setIsUpdatingEpg] = useState(false);
+
+  const [folderEditing, setFolderEditing] = useState(false);
+  const [folderDraft, setFolderDraft] = useState(recordingSettings.recordingsFolder ?? "/tmp/iptv-recordings");
+  const folderInputRef = useRef<any>(null);
+  const [activeRecCount, setActiveRecCount] = useState(0);
+  const [serverTotalMB, setServerTotalMB] = useState(0);
+
+  useEffect(() => {
+    if (page !== "recording") return;
+    const fetchActive = async () => {
+      try {
+        const domain = process.env.EXPO_PUBLIC_DOMAIN;
+        const base = domain ? `https://${domain}/api` : "/api";
+        const r = await fetch(`${base}/recordings/active`);
+        if (!r.ok) return;
+        const data: { id: string; channelName: string; filePath: string; startedAt: number; fileSize: number }[] = await r.json();
+        setActiveRecCount(data.length);
+        setServerTotalMB(data.reduce((s, d) => s + (d.fileSize ?? 0), 0) / (1024 * 1024));
+      } catch {}
+    };
+    fetchActive();
+    const t = setInterval(fetchActive, 5000);
+    return () => clearInterval(t);
+  }, [page]);
 
   const updateGeneral = (patch: Partial<typeof generalSettings>) =>
     setGeneralSettings((prev) => ({ ...prev, ...patch }));
@@ -797,45 +821,165 @@ export default function SettingsScreen() {
     </ScrollView>
   );
 
-  const renderRecording = () => (
-    <ScrollView contentContainerStyle={{ paddingBottom: bottomPad + 24 }}>
-      <View style={styles.card}>
-        <SettingRow label="Recordings folder" value={recordingSettings.recordingsFolder} onPress={() => {}} last />
-      </View>
-      <View style={[styles.card, { marginTop: 12 }]}>
-        <View style={[rowStyles.row, { borderBottomColor: "rgba(255,255,255,0.06)", borderBottomWidth: StyleSheet.hairlineWidth }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontFamily: "Inter_400Regular", color: "#fff" }}>Start recording before program start, min</Text>
-            <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2, fontFamily: "Inter_400Regular" }}>{recordingSettings.startBeforeMinutes}</Text>
+  const renderRecording = () => {
+    const saveFolderDraft = () => {
+      const trimmed = folderDraft.trim() || "/tmp/iptv-recordings";
+      setFolderDraft(trimmed);
+      updateRecordingSettings({ recordingsFolder: trimmed });
+      setFolderEditing(false);
+    };
+
+    return (
+      <ScrollView contentContainerStyle={{ paddingBottom: bottomPad + 24 }}>
+        {/* Server status card */}
+        <View style={[styles.card, { marginTop: 12 }]}>
+          <View style={[rowStyles.row, { borderBottomColor: "rgba(255,255,255,0.06)", borderBottomWidth: StyleSheet.hairlineWidth }]}>
+            <Feather name="server" size={16} color="rgba(255,255,255,0.45)" style={{ marginRight: 4 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontFamily: "Inter_400Regular", color: "#fff" }}>Server recordings</Text>
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2, fontFamily: "Inter_400Regular" }}>
+                Recorded via FFmpeg on the API server
+              </Text>
+            </View>
+            {activeRecCount > 0 ? (
+              <View style={{ backgroundColor: "#e53935", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
+                  {activeRecCount} active
+                </Text>
+              </View>
+            ) : (
+              <View style={{ backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, fontFamily: "Inter_400Regular" }}>
+                  idle
+                </Text>
+              </View>
+            )}
           </View>
-          <View style={styles.stepper}>
-            <TouchableOpacity style={[styles.stepBtn, { borderColor: "rgba(255,255,255,0.1)" }]} onPress={() => { Haptics.selectionAsync(); updateRecordingSettings({ startBeforeMinutes: Math.max(0, recordingSettings.startBeforeMinutes - 1) }); }}>
-              <Feather name="minus" size={14} color="#fff" />
-            </TouchableOpacity>
-            <Text style={[styles.stepValue, { color: "#fff" }]}>{recordingSettings.startBeforeMinutes}</Text>
-            <TouchableOpacity style={[styles.stepBtn, { borderColor: "rgba(255,255,255,0.1)" }]} onPress={() => { Haptics.selectionAsync(); updateRecordingSettings({ startBeforeMinutes: Math.min(60, recordingSettings.startBeforeMinutes + 1) }); }}>
-              <Feather name="plus" size={14} color="#fff" />
+          {activeRecCount > 0 && (
+            <View style={[rowStyles.row, { borderBottomColor: "rgba(255,255,255,0.06)", borderBottomWidth: StyleSheet.hairlineWidth }]}>
+              <Feather name="hard-drive" size={16} color="rgba(255,255,255,0.45)" style={{ marginRight: 4 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.7)" }}>
+                  Currently writing
+                </Text>
+              </View>
+              <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#fff" }}>
+                {serverTotalMB >= 1024
+                  ? `${(serverTotalMB / 1024).toFixed(1)} GB`
+                  : `${serverTotalMB.toFixed(0)} MB`}
+              </Text>
+            </View>
+          )}
+          <View style={rowStyles.row}>
+            <Feather name="folder" size={16} color="rgba(255,255,255,0.45)" style={{ marginRight: 4 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontFamily: "Inter_400Regular", color: "#fff" }}>Output folder</Text>
+              {folderEditing ? (
+                <TextInput
+                  ref={folderInputRef}
+                  value={folderDraft}
+                  onChangeText={setFolderDraft}
+                  onSubmitEditing={saveFolderDraft}
+                  onBlur={saveFolderDraft}
+                  autoFocus
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{
+                    fontSize: 12,
+                    fontFamily: "Inter_400Regular",
+                    color: colors.primary,
+                    marginTop: 4,
+                    paddingVertical: 0,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.primary,
+                  }}
+                />
+              ) : (
+                <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2, fontFamily: "Inter_400Regular" }}>
+                  {recordingSettings.recordingsFolder ?? "/tmp/iptv-recordings"}
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                if (folderEditing) {
+                  saveFolderDraft();
+                } else {
+                  setFolderDraft(recordingSettings.recordingsFolder ?? "/tmp/iptv-recordings");
+                  setFolderEditing(true);
+                }
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Feather
+                name={folderEditing ? "check" : "edit-2"}
+                size={16}
+                color={folderEditing ? colors.primary : "rgba(255,255,255,0.4)"}
+              />
             </TouchableOpacity>
           </View>
         </View>
-        <View style={rowStyles.row}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontFamily: "Inter_400Regular", color: "#fff" }}>Stop recording after program end, min</Text>
-            <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2, fontFamily: "Inter_400Regular" }}>{recordingSettings.stopAfterMinutes}</Text>
+
+        <Text style={[styles.footerNote, { color: "rgba(255,255,255,0.35)", marginBottom: 4 }]}>
+          Files are stored on the server as .ts streams. Use the download option in Recordings to save them to your device.
+        </Text>
+
+        {/* Padding card */}
+        <View style={[styles.card, { marginTop: 16 }]}>
+          <View style={[rowStyles.row, { borderBottomColor: "rgba(255,255,255,0.06)", borderBottomWidth: StyleSheet.hairlineWidth }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontFamily: "Inter_400Regular", color: "#fff" }}>Start early</Text>
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2, fontFamily: "Inter_400Regular" }}>
+                Begin recording this many minutes before program start
+              </Text>
+            </View>
+            <View style={styles.stepper}>
+              <TouchableOpacity
+                style={[styles.stepBtn, { borderColor: "rgba(255,255,255,0.1)" }]}
+                onPress={() => { Haptics.selectionAsync(); updateRecordingSettings({ startBeforeMinutes: Math.max(0, recordingSettings.startBeforeMinutes - 1) }); }}
+              >
+                <Feather name="minus" size={14} color="#fff" />
+              </TouchableOpacity>
+              <Text style={[styles.stepValue, { color: "#fff" }]}>{recordingSettings.startBeforeMinutes}</Text>
+              <TouchableOpacity
+                style={[styles.stepBtn, { borderColor: "rgba(255,255,255,0.1)" }]}
+                onPress={() => { Haptics.selectionAsync(); updateRecordingSettings({ startBeforeMinutes: Math.min(60, recordingSettings.startBeforeMinutes + 1) }); }}
+              >
+                <Feather name="plus" size={14} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.stepper}>
-            <TouchableOpacity style={[styles.stepBtn, { borderColor: "rgba(255,255,255,0.1)" }]} onPress={() => { Haptics.selectionAsync(); updateRecordingSettings({ stopAfterMinutes: Math.max(0, recordingSettings.stopAfterMinutes - 1) }); }}>
-              <Feather name="minus" size={14} color="#fff" />
-            </TouchableOpacity>
-            <Text style={[styles.stepValue, { color: "#fff" }]}>{recordingSettings.stopAfterMinutes}</Text>
-            <TouchableOpacity style={[styles.stepBtn, { borderColor: "rgba(255,255,255,0.1)" }]} onPress={() => { Haptics.selectionAsync(); updateRecordingSettings({ stopAfterMinutes: Math.min(60, recordingSettings.stopAfterMinutes + 1) }); }}>
-              <Feather name="plus" size={14} color="#fff" />
-            </TouchableOpacity>
+          <View style={rowStyles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontFamily: "Inter_400Regular", color: "#fff" }}>Stop late</Text>
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2, fontFamily: "Inter_400Regular" }}>
+                Continue recording this many minutes after program end
+              </Text>
+            </View>
+            <View style={styles.stepper}>
+              <TouchableOpacity
+                style={[styles.stepBtn, { borderColor: "rgba(255,255,255,0.1)" }]}
+                onPress={() => { Haptics.selectionAsync(); updateRecordingSettings({ stopAfterMinutes: Math.max(0, recordingSettings.stopAfterMinutes - 1) }); }}
+              >
+                <Feather name="minus" size={14} color="#fff" />
+              </TouchableOpacity>
+              <Text style={[styles.stepValue, { color: "#fff" }]}>{recordingSettings.stopAfterMinutes}</Text>
+              <TouchableOpacity
+                style={[styles.stepBtn, { borderColor: "rgba(255,255,255,0.1)" }]}
+                onPress={() => { Haptics.selectionAsync(); updateRecordingSettings({ stopAfterMinutes: Math.min(60, recordingSettings.stopAfterMinutes + 1) }); }}
+              >
+                <Feather name="plus" size={14} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
-    </ScrollView>
-  );
+
+        <Text style={[styles.footerNote, { color: "rgba(255,255,255,0.35)" }]}>
+          Minutes: 0 = record exactly as scheduled. Up to 60 min early start or late stop.
+        </Text>
+      </ScrollView>
+    );
+  };
 
   const renderVOD = () => (
     <ScrollView contentContainerStyle={{ paddingBottom: bottomPad + 24 }}>
