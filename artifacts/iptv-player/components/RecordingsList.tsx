@@ -18,6 +18,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Recording, useIPTV } from "@/context/IPTVContext";
 import { useColors } from "@/hooks/useColors";
+import {
+  useServerRecordings,
+  formatBytes,
+  formatElapsed,
+} from "@/hooks/useServerRecordings";
 
 function getStatus(r: Recording, now: number): "recording" | "scheduled" | "completed" {
   if (r.endTime < now) return "completed";
@@ -47,22 +52,9 @@ function formatDuration(start: number, end: number) {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-function sanitizeFilename(title: string): string {
-  return title.replace(/[/\\?%*:|"<>]/g, "_").slice(0, 80);
-}
-
-function buildFilePath(folder: string, programTitle: string, channelName: string, startTime: number): string {
-  const dt = new Date(startTime);
-  const date = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-  const time = `${String(dt.getHours()).padStart(2, "0")}${String(dt.getMinutes()).padStart(2, "0")}`;
-  const base = sanitizeFilename(`${date}_${time}_${channelName}_${programTitle}`);
-  return `${folder}/${base}.ts`;
-}
-
 function openInExternalPlayer(url: string) {
   if (Platform.OS === "android") {
-    const intentUrl = `intent:${url}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
-    Linking.openURL(intentUrl).catch(() => {
+    Linking.openURL(`intent:${url}#Intent;action=android.intent.action.VIEW;type=video/*;end`).catch(() => {
       Linking.openURL(url).catch(() => {});
     });
   } else {
@@ -70,14 +62,16 @@ function openInExternalPlayer(url: string) {
   }
 }
 
+// ─── Play picker sheet ────────────────────────────────────────────────────────
+
 interface PlayPickerSheetProps {
   recording: Recording | null;
-  filePath: string;
+  downloadUrl: string | null;
   onClose: () => void;
   onPlayInternal: (url: string, name: string) => void;
 }
 
-function PlayPickerSheet({ recording, filePath, onClose, onPlayInternal }: PlayPickerSheetProps) {
+function PlayPickerSheet({ recording, downloadUrl, onClose, onPlayInternal }: PlayPickerSheetProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -88,8 +82,9 @@ function PlayPickerSheet({ recording, filePath, onClose, onPlayInternal }: PlayP
     icon: React.ComponentProps<typeof Feather>["name"];
     label: string;
     sublabel: string;
-    accent?: string;
+    accent: string;
     onPress: () => void;
+    disabled?: boolean;
   }[] = [
     {
       icon: "play-circle",
@@ -104,15 +99,23 @@ function PlayPickerSheet({ recording, filePath, onClose, onPlayInternal }: PlayP
     {
       icon: "external-link",
       label: "Open in external player",
-      sublabel: Platform.OS === "android"
-        ? "MX Player, VLC, Kodi…"
-        : "Opens with default video handler",
+      sublabel: Platform.OS === "android" ? "MX Player, VLC, Kodi…" : "Opens with system video handler",
       accent: "#4CAF50",
       onPress: () => {
         onClose();
         openInExternalPlayer(recording.url);
       },
     },
+    ...(downloadUrl ? [{
+      icon: "download" as const,
+      label: "Download recording file",
+      sublabel: "Save the .ts file to your device",
+      accent: "#2196F3",
+      onPress: () => {
+        onClose();
+        Linking.openURL(downloadUrl).catch(() => {});
+      },
+    }] : []),
   ];
 
   return (
@@ -149,12 +152,17 @@ function PlayPickerSheet({ recording, filePath, onClose, onPlayInternal }: PlayP
               {options.map((opt) => (
                 <TouchableOpacity
                   key={opt.label}
-                  style={sheetStyles.optionRow}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); opt.onPress(); }}
-                  activeOpacity={0.75}
+                  style={[sheetStyles.optionRow, opt.disabled && { opacity: 0.4 }]}
+                  onPress={() => {
+                    if (!opt.disabled) {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      opt.onPress();
+                    }
+                  }}
+                  activeOpacity={opt.disabled ? 1 : 0.75}
                 >
                   <View style={[sheetStyles.optionIconWrap, { backgroundColor: `${opt.accent}18` }]}>
-                    <Feather name={opt.icon} size={22} color={opt.accent ?? "#fff"} />
+                    <Feather name={opt.icon} size={22} color={opt.accent} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[sheetStyles.optionLabel, { color: "#fff" }]}>{opt.label}</Text>
@@ -163,18 +171,6 @@ function PlayPickerSheet({ recording, filePath, onClose, onPlayInternal }: PlayP
                   <Feather name="chevron-right" size={16} color="rgba(255,255,255,0.25)" />
                 </TouchableOpacity>
               ))}
-
-              <View style={[sheetStyles.filePathBox, { backgroundColor: "rgba(255,255,255,0.05)", borderColor: "rgba(255,255,255,0.08)" }]}>
-                <View style={sheetStyles.filePathHeader}>
-                  <Feather name="folder" size={12} color="rgba(255,255,255,0.35)" />
-                  <Text style={[sheetStyles.filePathLabel, { color: "rgba(255,255,255,0.35)" }]}>
-                    Recording file location
-                  </Text>
-                </View>
-                <Text style={[sheetStyles.filePathText, { color: "rgba(255,255,255,0.5)" }]} selectable>
-                  {filePath}
-                </Text>
-              </View>
             </View>
           </TouchableWithoutFeedback>
         </View>
@@ -183,20 +179,29 @@ function PlayPickerSheet({ recording, filePath, onClose, onPlayInternal }: PlayP
   );
 }
 
+// ─── Recording card ───────────────────────────────────────────────────────────
+
 function RecordingCard({
   recording,
   now,
+  serverFileSize,
+  serverElapsed,
+  serverAlive,
   onPlayPress,
   onCancel,
 }: {
   recording: Recording;
   now: number;
+  serverFileSize: number;
+  serverElapsed: number;
+  serverAlive: boolean;
   onPlayPress: (r: Recording) => void;
   onCancel: (r: Recording) => void;
 }) {
   const colors = useColors();
   const status = getStatus(recording, now);
-  const progress =
+
+  const scheduledProgress =
     status === "recording"
       ? Math.min(1, (now - recording.startTime) / (recording.endTime - recording.startTime))
       : 0;
@@ -256,6 +261,28 @@ function RecordingCard({
               {formatDuration(recording.startTime, recording.endTime)}
             </Text>
           </View>
+
+          {/* Live server recording stats */}
+          {serverAlive && serverFileSize > 0 && (
+            <View style={styles.serverStatsRow}>
+              <View style={[styles.recDotLive, { backgroundColor: "#f44336" }]} />
+              <Text style={[styles.serverStatText, { color: "#f44336" }]}>
+                {formatElapsed(serverElapsed)}
+              </Text>
+              <Text style={[styles.serverStatSep, { color: colors.mutedForeground }]}>·</Text>
+              <Text style={[styles.serverStatText, { color: colors.mutedForeground }]}>
+                {formatBytes(serverFileSize)}
+              </Text>
+            </View>
+          )}
+          {!serverAlive && serverFileSize > 0 && (
+            <View style={styles.serverStatsRow}>
+              <Feather name="check-circle" size={11} color={colors.mutedForeground} />
+              <Text style={[styles.serverStatText, { color: colors.mutedForeground }]}>
+                {formatBytes(serverFileSize)} saved
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.cardActions}>
@@ -288,24 +315,27 @@ function RecordingCard({
         </View>
       </View>
 
+      {/* Scheduled-progress bar (time based) */}
       {status === "recording" && (
         <View style={styles.progressContainer}>
           <View style={[styles.progressTrack, { backgroundColor: colors.secondary }]}>
             <View
               style={[
                 styles.progressFill,
-                { backgroundColor: "#f44336", width: `${progress * 100}%` as any },
+                { backgroundColor: "#f44336", width: `${scheduledProgress * 100}%` as any },
               ]}
             />
           </View>
           <Text style={[styles.progressText, { color: "#f44336" }]}>
-            {Math.round(progress * 100)}%
+            {Math.round(scheduledProgress * 100)}%
           </Text>
         </View>
       )}
     </View>
   );
 }
+
+// ─── Main list ────────────────────────────────────────────────────────────────
 
 type SectionItem =
   | { type: "header"; label: string; count: number }
@@ -314,9 +344,11 @@ type SectionItem =
 export function RecordingsList({ onPlay }: { onPlay: (url: string, name: string) => void }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { recordings, cancelRecording, recordingSettings } = useIPTV();
+  const { recordings, cancelRecording } = useIPTV();
   const [now] = useState(() => Date.now());
   const [pickerRecording, setPickerRecording] = useState<Recording | null>(null);
+
+  const { statuses } = useServerRecordings(recordings);
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -376,15 +408,9 @@ export function RecordingsList({ onPlay }: { onPlay: (url: string, name: string)
     );
   };
 
-  const pickerFilePath = useMemo(() => {
-    if (!pickerRecording) return "";
-    return buildFilePath(
-      recordingSettings.recordingsFolder,
-      pickerRecording.programTitle,
-      pickerRecording.channelName,
-      pickerRecording.startTime,
-    );
-  }, [pickerRecording, recordingSettings.recordingsFolder]);
+  const pickerDownloadUrl = pickerRecording
+    ? (statuses[pickerRecording.id]?.downloadUrl ?? null)
+    : null;
 
   if (recordings.length === 0) {
     return (
@@ -430,10 +456,14 @@ export function RecordingsList({ onPlay }: { onPlay: (url: string, name: string)
               </View>
             );
           }
+          const s = statuses[item.recording.id];
           return (
             <RecordingCard
               recording={item.recording}
               now={now}
+              serverFileSize={s?.fileSize ?? 0}
+              serverElapsed={s?.elapsedMs ?? 0}
+              serverAlive={s?.alive ?? false}
               onPlayPress={(r) => setPickerRecording(r)}
               onCancel={handleCancel}
             />
@@ -443,7 +473,7 @@ export function RecordingsList({ onPlay }: { onPlay: (url: string, name: string)
 
       <PlayPickerSheet
         recording={pickerRecording}
-        filePath={pickerFilePath}
+        downloadUrl={pickerDownloadUrl}
         onClose={() => setPickerRecording(null)}
         onPlayInternal={(url, name) => {
           setPickerRecording(null);
@@ -453,6 +483,8 @@ export function RecordingsList({ onPlay }: { onPlay: (url: string, name: string)
     </>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const sheetStyles = StyleSheet.create({
   overlay: {
@@ -465,7 +497,6 @@ const sheetStyles = StyleSheet.create({
     borderTopRightRadius: 20,
     paddingTop: 10,
     paddingHorizontal: 20,
-    gap: 0,
   },
   handle: {
     width: 36,
@@ -491,25 +522,10 @@ const sheetStyles = StyleSheet.create({
     flexShrink: 0,
   },
   metaLogoImg: { width: 48, height: 48 },
-  metaTitle: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    lineHeight: 20,
-    marginBottom: 2,
-  },
-  metaChannel: {
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    marginBottom: 2,
-  },
-  metaTime: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginBottom: 8,
-  },
+  metaTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", lineHeight: 20, marginBottom: 2 },
+  metaChannel: { fontSize: 12, fontFamily: "Inter_500Medium", marginBottom: 2 },
+  metaTime: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  divider: { height: StyleSheet.hairlineWidth, marginBottom: 8 },
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -526,45 +542,12 @@ const sheetStyles = StyleSheet.create({
     alignItems: "center",
     flexShrink: 0,
   },
-  optionLabel: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    marginBottom: 2,
-  },
-  optionSublabel: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-  },
-  filePathBox: {
-    marginTop: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    padding: 12,
-    gap: 6,
-  },
-  filePathHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  filePathLabel: {
-    fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  filePathText: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 16,
-  },
+  optionLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
+  optionSublabel: { fontSize: 12, fontFamily: "Inter_400Regular" },
 });
 
 const styles = StyleSheet.create({
-  list: {
-    padding: 12,
-    gap: 8,
-  },
+  list: { padding: 12, gap: 8 },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -573,11 +556,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 6,
   },
-  sectionDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
+  sectionDot: { width: 8, height: 8, borderRadius: 4 },
   sectionLabel: {
     fontSize: 12,
     fontFamily: "Inter_700Bold",
@@ -585,15 +564,8 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     flex: 1,
   },
-  sectionCount: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  sectionCountText: {
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-  },
+  sectionCount: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
+  sectionCountText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   card: {
     borderRadius: 12,
     borderWidth: 1,
@@ -601,11 +573,7 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 10,
   },
-  cardTop: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "flex-start",
-  },
+  cardTop: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   channelLogo: {
     width: 44,
     height: 44,
@@ -615,49 +583,29 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     flexShrink: 0,
   },
-  logoImg: {
-    width: 44,
-    height: 44,
-  },
-  cardInfo: {
-    flex: 1,
-    gap: 3,
-  },
-  programTitle: {
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    lineHeight: 18,
-  },
-  channelName: {
-    fontSize: 11,
-    fontFamily: "Inter_500Medium",
-  },
-  metaRow: {
+  logoImg: { width: 44, height: 44 },
+  cardInfo: { flex: 1, gap: 3 },
+  programTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", lineHeight: 18 },
+  channelName: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap" },
+  dateText: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  dot: { fontSize: 11 },
+  timeRangeText: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  durationText: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  serverStatsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 3,
   },
-  dateText: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
+  recDotLive: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  dot: {
-    fontSize: 11,
-  },
-  timeRangeText: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-  },
-  durationText: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-  },
-  cardActions: {
-    alignItems: "flex-end",
-    gap: 6,
-    flexShrink: 0,
-  },
+  serverStatText: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  serverStatSep: { fontSize: 11 },
+  cardActions: { alignItems: "flex-end", gap: 6, flexShrink: 0 },
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -667,10 +615,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
-  statusText: {
-    fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
-  },
+  statusText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   actionBtn: {
     width: 30,
     height: 30,
@@ -679,27 +624,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
   },
-  progressContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  progressTrack: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: 4,
-    borderRadius: 2,
-  },
-  progressText: {
-    fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
-    width: 32,
-    textAlign: "right",
-  },
+  progressContainer: { flexDirection: "row", alignItems: "center", gap: 8 },
+  progressTrack: { flex: 1, height: 4, borderRadius: 2, overflow: "hidden" },
+  progressFill: { height: 4, borderRadius: 2 },
+  progressText: { fontSize: 10, fontFamily: "Inter_600SemiBold", width: 32, textAlign: "right" },
   empty: {
     flex: 1,
     alignItems: "center",
@@ -715,15 +643,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 4,
   },
-  emptyTitle: {
-    fontSize: 17,
-    fontFamily: "Inter_700Bold",
-    textAlign: "center",
-  },
-  emptyText: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    lineHeight: 20,
-  },
+  emptyTitle: { fontSize: 17, fontFamily: "Inter_700Bold", textAlign: "center" },
+  emptyText: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
 });
