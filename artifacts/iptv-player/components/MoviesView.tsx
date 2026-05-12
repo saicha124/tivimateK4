@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import React, { useRef, useMemo, useState } from "react";
 import {
+  FlatList,
   Platform,
   Pressable,
   ScrollView,
@@ -225,6 +226,360 @@ function PosterCard({
   );
 }
 
+// ─── Full-screen category view (TiviMate style) ──────────────────────────────
+
+const FS_POSTER_W = 100;
+const FS_POSTER_H = 148;
+
+function CategoryFullScreenView({
+  category,
+  movies,
+  selectedMovie,
+  selectedIdx,
+  onSelectMovie,
+  onBack,
+  onPlay,
+  onToggleFav,
+  isFav,
+  colors,
+  topPad,
+  bottomPad,
+}: {
+  category: string;
+  movies: VODItem[];
+  selectedMovie: VODItem | null;
+  selectedIdx: number;
+  onSelectMovie: (movie: VODItem) => void;
+  onBack: () => void;
+  onPlay: (movie: VODItem) => void;
+  onToggleFav: (id: string) => void;
+  isFav: (id: string) => boolean;
+  colors: ReturnType<typeof useColors>;
+  topPad: number;
+  bottomPad: number;
+}) {
+  const m = selectedMovie;
+  const yearStr = m?.year ? m.year.slice(0, 4) : null;
+  const ratingVal = m?.rating ? parseFloat(m.rating) : null;
+  const hasRating = ratingVal !== null && !isNaN(ratingVal);
+  const hasFav = m ? isFav(m.id) : false;
+
+  return (
+    <View style={[fsStyles.container, { backgroundColor: "#000" }]}>
+      {/* Backdrop */}
+      {m?.logo ? (
+        <Image
+          source={{ uri: m.logo }}
+          style={StyleSheet.absoluteFillObject}
+          contentFit="cover"
+          blurRadius={Platform.OS === "web" ? 2 : 10}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111" }]} />
+      )}
+      <LinearGradient
+        colors={["rgba(0,0,0,0.45)", "rgba(8,8,8,0.96)"]}
+        style={StyleSheet.absoluteFillObject}
+      />
+
+      {/* Top bar */}
+      <View style={[fsStyles.topBar, { paddingTop: topPad + 6 }]}>
+        <TouchableOpacity onPress={onBack} style={fsStyles.topIconBtn} activeOpacity={0.7}>
+          <Feather name="arrow-left" size={20} color="#fff" />
+        </TouchableOpacity>
+        <Text style={fsStyles.topTitle} numberOfLines={1}>{category}</Text>
+        <View style={fsStyles.topActions}>
+          <TouchableOpacity style={fsStyles.topIconBtn} activeOpacity={0.7}>
+            <Feather name="search" size={19} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity style={fsStyles.topIconBtn} activeOpacity={0.7}>
+            <Feather name="sliders" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Movie info overlay */}
+      {m && (
+        <View style={fsStyles.infoArea}>
+          <Text style={fsStyles.infoTitle} numberOfLines={2}>{m.name}</Text>
+          <View style={fsStyles.infoMeta}>
+            {hasRating && (
+              <View style={[fsStyles.ratingBadge, { backgroundColor: colors.primary }]}>
+                <Text style={fsStyles.ratingText}>{ratingVal!.toFixed(1)}</Text>
+              </View>
+            )}
+            {yearStr ? <Text style={fsStyles.metaText}>{yearStr}</Text> : null}
+            {(m.genres || m.category) ? (
+              <Text style={[fsStyles.metaText, { color: colors.primary }]}>
+                · {m.genres ?? m.category}
+              </Text>
+            ) : null}
+          </View>
+          {m.actors && m.actors !== "N/A" && (
+            <Text style={fsStyles.castRow} numberOfLines={1}>
+              <Text style={fsStyles.castLabel}>Cast:  </Text>{m.actors}
+            </Text>
+          )}
+          {m.director && m.director !== "N/A" && (
+            <Text style={fsStyles.castRow} numberOfLines={1}>
+              <Text style={fsStyles.castLabel}>Director:  </Text>{m.director}
+            </Text>
+          )}
+          {m.description ? (
+            <Text style={fsStyles.desc} numberOfLines={4}>{m.description}</Text>
+          ) : null}
+          <View style={fsStyles.actionRow}>
+            <TouchableOpacity
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onPlay(m); }}
+              style={[fsStyles.playBtn, { backgroundColor: "#fff" }]}
+              activeOpacity={0.85}
+            >
+              <Feather name="play" size={14} color="#000" />
+              <Text style={[fsStyles.playBtnText, { color: "#000" }]}>Play</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); onToggleFav(m.id); }}
+              style={[fsStyles.outlineBtn, { borderColor: hasFav ? colors.primary : "rgba(255,255,255,0.45)" }]}
+              activeOpacity={0.8}
+            >
+              <Feather name="bookmark" size={14} color={hasFav ? colors.primary : "rgba(255,255,255,0.8)"} />
+              <Text style={[fsStyles.outlineBtnText, { color: hasFav ? colors.primary : "rgba(255,255,255,0.8)" }]}>
+                {hasFav ? "Saved" : "My List"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Bottom poster strip */}
+      <View style={[fsStyles.bottomStrip, { paddingBottom: bottomPad + 10 }]}>
+        <View style={fsStyles.stripHeader}>
+          <Text style={fsStyles.stripCatLabel}>{category}</Text>
+          <Text style={fsStyles.stripCount}>
+            {selectedIdx + 1} / {movies.length}
+          </Text>
+        </View>
+        <FlatList
+          data={movies}
+          horizontal
+          keyExtractor={(mv) => mv.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}
+          initialScrollIndex={Math.max(0, selectedIdx - 2)}
+          getItemLayout={(_, index) => ({
+            length: FS_POSTER_W + 8,
+            offset: (FS_POSTER_W + 8) * index,
+            index,
+          })}
+          renderItem={({ item: mv }) => (
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); onSelectMovie(mv); }}
+              activeOpacity={0.8}
+              style={[
+                fsStyles.stripPoster,
+                selectedMovie?.id === mv.id && { borderColor: colors.primary, borderWidth: 2 },
+              ]}
+            >
+              {mv.logo ? (
+                <Image source={{ uri: mv.logo }} style={fsStyles.stripPosterImg} contentFit="cover" />
+              ) : (
+                <View style={[fsStyles.stripPosterImg, { backgroundColor: "#222", justifyContent: "center", alignItems: "center" }]}>
+                  <Feather name="film" size={18} color="#555" />
+                </View>
+              )}
+              <LinearGradient
+                colors={["transparent", "rgba(0,0,0,0.82)"]}
+                style={fsStyles.stripPosterGrad}
+              />
+              {mv.rating && parseFloat(mv.rating) > 0 && (
+                <View style={[fsStyles.stripRatingBadge, { backgroundColor: colors.primary }]}>
+                  <Text style={fsStyles.stripRatingText}>{parseFloat(mv.rating).toFixed(1)}</Text>
+                </View>
+              )}
+              <Text style={fsStyles.stripPosterName} numberOfLines={2}>{mv.name}</Text>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+    </View>
+  );
+}
+
+const fsStyles = StyleSheet.create({
+  container: { flex: 1 },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  topIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  topTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
+    letterSpacing: -0.3,
+  },
+  topActions: { flexDirection: "row", gap: 8 },
+  infoArea: {
+    flex: 1,
+    paddingHorizontal: 22,
+    paddingTop: 12,
+    maxWidth: 560,
+  },
+  infoTitle: {
+    fontSize: 28,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
+    marginBottom: 10,
+    lineHeight: 34,
+  },
+  infoMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+    flexWrap: "wrap",
+  },
+  ratingBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  ratingText: {
+    color: "#fff",
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+  },
+  metaText: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  castLabel: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  castRow: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  desc: {
+    color: "rgba(255,255,255,0.58)",
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 18,
+  },
+  playBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 6,
+  },
+  playBtnText: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+  },
+  outlineBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  outlineBtnText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+  bottomStrip: {
+    paddingTop: 12,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.1)",
+  },
+  stripHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  stripCatLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
+  },
+  stripCount: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.45)",
+  },
+  stripPoster: {
+    width: FS_POSTER_W,
+    height: FS_POSTER_H,
+    borderRadius: 6,
+    overflow: "hidden",
+    position: "relative",
+  },
+  stripPosterImg: {
+    width: FS_POSTER_W,
+    height: FS_POSTER_H,
+  },
+  stripPosterGrad: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 65,
+  },
+  stripRatingBadge: {
+    position: "absolute",
+    bottom: 22,
+    left: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 3,
+  },
+  stripRatingText: {
+    color: "#fff",
+    fontSize: 9,
+    fontFamily: "Inter_700Bold",
+  },
+  stripPosterName: {
+    position: "absolute",
+    bottom: 5,
+    left: 5,
+    right: 5,
+    fontSize: 9,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+    lineHeight: 12,
+  },
+});
+
 // ─── Main MoviesView ──────────────────────────────────────────────────────────
 
 export function MoviesView({ onPlayVOD }: MoviesViewProps) {
@@ -242,6 +597,7 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
   const [selectedCat, setSelectedCat] = useState<string>("All movies");
   const [selectedMovie, setSelectedMovie] = useState<VODItem | null>(movies[0] ?? null);
   const [query, setQuery] = useState("");
+  const [fullScreenMode, setFullScreenMode] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   const searchResults = useMemo(() => {
@@ -287,6 +643,38 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
     );
   }
 
+  if (fullScreenMode && !SPECIAL_CATS.includes(selectedCat)) {
+    const selIdx = selectedMovie
+      ? filteredMovies.findIndex((mv) => mv.id === selectedMovie.id)
+      : 0;
+    return (
+      <CategoryFullScreenView
+        category={selectedCat}
+        movies={filteredMovies}
+        selectedMovie={selectedMovie ?? filteredMovies[0] ?? null}
+        selectedIdx={Math.max(0, selIdx)}
+        onSelectMovie={setSelectedMovie}
+        onBack={() => setFullScreenMode(false)}
+        onPlay={(movie) => {
+          addToWatchHistory({
+            channelId: movie.id,
+            channelName: movie.name,
+            channelGroup: movie.category,
+            channelLogo: movie.logo,
+            channelUrl: movie.url,
+            type: "movie",
+          });
+          onPlayVOD(movie.url, movie.name);
+        }}
+        onToggleFav={toggleFavorite}
+        isFav={(id) => favorites.includes(id)}
+        colors={colors}
+        topPad={topPad}
+        bottomPad={bottomPad}
+      />
+    );
+  }
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Left category sidebar */}
@@ -310,7 +698,14 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
                 onPress={() => {
                   Haptics.selectionAsync();
                   setSelectedCat(cat);
-                  setSelectedMovie(null);
+                  if (!SPECIAL_CATS.includes(cat)) {
+                    const catMovies = movies.filter((mv) => mv.category === cat);
+                    setSelectedMovie(catMovies[0] ?? null);
+                    setFullScreenMode(true);
+                  } else {
+                    setSelectedMovie(null);
+                    setFullScreenMode(false);
+                  }
                 }}
                 style={[styles.catItem, active && { backgroundColor: colors.highlight }]}
                 activeOpacity={0.7}
@@ -435,7 +830,12 @@ export function MoviesView({ onPlayVOD }: MoviesViewProps) {
                     {catGroups![cat].length}
                   </Text>
                   <TouchableOpacity
-                    onPress={() => { Haptics.selectionAsync(); setSelectedCat(cat); }}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setSelectedCat(cat);
+                      setSelectedMovie(catGroups![cat][0] ?? null);
+                      setFullScreenMode(true);
+                    }}
                     style={styles.seeAll}
                   >
                     <Text style={[styles.seeAllText, { color: colors.primary }]}>See all</Text>

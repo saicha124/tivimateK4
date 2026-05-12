@@ -246,7 +246,11 @@ function StalkerSeriesDetail({
               </Text>
             )}
 
-            <View style={styles.bannerActions}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.bannerActions}
+            >
               <TouchableOpacity
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -267,94 +271,110 @@ function StalkerSeriesDetail({
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); onToggleFav(); }}
                 style={[styles.favBtn, {
-                  backgroundColor: isFav ? `${colors.primary}22` : colors.secondary,
-                  borderColor: isFav ? colors.primary : colors.border,
+                  backgroundColor: isFav ? `${colors.primary}22` : "transparent",
+                  borderColor: isFav ? colors.primary : "rgba(255,255,255,0.4)",
                 }]}
                 activeOpacity={0.8}
               >
-                <Feather name="bookmark" size={14} color={isFav ? colors.primary : colors.mutedForeground} />
-                <Text style={[styles.favBtnText, { color: isFav ? colors.primary : colors.mutedForeground }]}>
+                <Feather name="bookmark" size={14} color={isFav ? colors.primary : "rgba(255,255,255,0.85)"} />
+                <Text style={[styles.favBtnText, { color: isFav ? colors.primary : "rgba(255,255,255,0.85)" }]}>
                   {isFav ? "Saved" : "My List"}
                 </Text>
               </TouchableOpacity>
-            </View>
+              <TouchableOpacity
+                onPress={() => { Haptics.selectionAsync(); }}
+                style={[styles.favBtn, { backgroundColor: "transparent", borderColor: "rgba(255,255,255,0.4)" }]}
+                activeOpacity={0.8}
+              >
+                <Feather name="external-link" size={14} color="rgba(255,255,255,0.85)" />
+                <Text style={[styles.favBtnText, { color: "rgba(255,255,255,0.85)" }]}>External</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { Haptics.selectionAsync(); }}
+                style={[styles.favBtn, { backgroundColor: "transparent", borderColor: "rgba(255,255,255,0.4)" }]}
+                activeOpacity={0.8}
+              >
+                <Feather name="youtube" size={14} color="rgba(255,255,255,0.85)" />
+                <Text style={[styles.favBtnText, { color: "rgba(255,255,255,0.85)" }]}>Trailer</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </View>
 
       {/* Seasons + Episodes or metadata fallback */}
       {hasSeasonsData ? (
-        <View style={{ flex: 1 }}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={[styles.seasonTabs, { backgroundColor: colors.sidebar, borderBottomColor: colors.border }]}
-            contentContainerStyle={{ paddingHorizontal: 12, gap: 4 }}
-          >
-            {seasons.map((s) => {
-              const active = s.id === selectedSeasonId;
-              return (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+          {seasons.map((s) => {
+            const isActive = s.id === selectedSeasonId;
+            return (
+              <View key={s.id}>
                 <TouchableOpacity
-                  key={s.id}
                   onPress={() => { Haptics.selectionAsync(); setSelectedSeasonId(s.id); }}
-                  style={[styles.seasonTab, active ? { backgroundColor: colors.primary } : { backgroundColor: colors.secondary }]}
+                  style={[styles.seasonRow, { borderBottomColor: colors.border }]}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.seasonTabText, { color: active ? "#fff" : colors.mutedForeground }]}>
+                  <Feather
+                    name={isActive ? "chevron-down" : "chevron-right"}
+                    size={14}
+                    color={isActive ? colors.primary : colors.mutedForeground}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={[styles.seasonRowLabel, { color: isActive ? colors.foreground : colors.mutedForeground, fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
                     {s.name}
                   </Text>
+                  {isActive && !loadingEpisodes && episodes.length > 0 && (
+                    <Text style={[styles.seasonRowCount, { color: colors.mutedForeground }]}>
+                      {episodes.length} ep
+                    </Text>
+                  )}
                 </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          {loadingEpisodes ? (
-            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 8 }}>
-              <ActivityIndicator color={colors.primary} />
-            </View>
-          ) : (
-            <FlatList
-              data={episodes}
-              keyExtractor={(ep) => ep.id}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 20, paddingTop: 4 }}
-              renderItem={({ item: ep }) => (
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    onPlayEpisode(`stalker-episode:${seriesId}:${ep.episodeNum}`, `${item.name} E${ep.episodeNum}`);
-                  }}
-                  style={[styles.epRow, { borderBottomColor: colors.border }]}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.epNumBox, { backgroundColor: colors.secondary }]}>
-                    <Text style={[styles.epNum, { color: colors.mutedForeground }]}>{ep.episodeNum}</Text>
-                  </View>
-                  <View style={[styles.epThumb, { backgroundColor: colors.secondary }]}>
-                    {ep.logo ? (
-                      <Image source={{ uri: ep.logo }} style={styles.epThumbImg} contentFit="cover" />
-                    ) : (
-                      <Feather name="film" size={18} color={colors.mutedForeground} />
-                    )}
-                  </View>
-                  <View style={styles.epInfo}>
-                    <Text style={[styles.epTitle, { color: colors.foreground }]} numberOfLines={2}>{ep.name}</Text>
-                  </View>
-                  <View style={[styles.epPlayBtn, { backgroundColor: colors.primary }]}>
-                    <Feather name="play" size={13} color="#fff" />
-                  </View>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <View style={{ padding: 20, alignItems: "center" }}>
-                  <Text style={{ color: colors.mutedForeground, fontSize: 13, fontFamily: "Inter_400Regular" }}>
-                    No episodes found
-                  </Text>
-                </View>
-              }
-            />
-          )}
-        </View>
+                {isActive && (
+                  loadingEpisodes ? (
+                    <View style={{ paddingVertical: 18, alignItems: "center" }}>
+                      <ActivityIndicator color={colors.primary} />
+                    </View>
+                  ) : (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}
+                    >
+                      {episodes.length === 0 ? (
+                        <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular", paddingVertical: 8 }}>
+                          No episodes found
+                        </Text>
+                      ) : episodes.map((ep) => (
+                        <TouchableOpacity
+                          key={ep.id}
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            onPlayEpisode(`stalker-episode:${seriesId}:${ep.episodeNum}`, `${item.name} E${ep.episodeNum}`);
+                          }}
+                          style={styles.epCard}
+                          activeOpacity={0.8}
+                        >
+                          <View style={[styles.epCardThumb, { backgroundColor: colors.secondary }]}>
+                            {ep.logo ? (
+                              <Image source={{ uri: ep.logo }} style={styles.epCardThumbImg} contentFit="cover" />
+                            ) : (
+                              <Feather name="film" size={16} color={colors.mutedForeground} />
+                            )}
+                            <View style={[styles.epCardPlayOverlay, { backgroundColor: "rgba(0,0,0,0.35)" }]}>
+                              <Feather name="play" size={14} color="#fff" />
+                            </View>
+                          </View>
+                          <Text style={[styles.epCardNum, { color: colors.mutedForeground }]}>E{ep.episodeNum}</Text>
+                          <Text style={[styles.epCardName, { color: colors.foreground }]} numberOfLines={2}>{ep.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  )
+                )}
+              </View>
+            );
+          })}
+        </ScrollView>
       ) : loadingSeasons ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 8 }}>
           <ActivityIndicator color={colors.primary} />
@@ -439,7 +459,11 @@ function M3USeriesDetail({
               · {series.episodes.length} Episodes
             </Text>
           </View>
-          <View style={styles.bannerActions}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.bannerActions}
+          >
             <TouchableOpacity
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -456,82 +480,97 @@ function M3USeriesDetail({
             <TouchableOpacity
               onPress={() => { Haptics.selectionAsync(); onToggleFav(); }}
               style={[styles.favBtn, {
-                backgroundColor: isFav ? `${colors.primary}25` : colors.secondary,
-                borderColor: isFav ? colors.primary : colors.border,
+                backgroundColor: isFav ? `${colors.primary}22` : "transparent",
+                borderColor: isFav ? colors.primary : "rgba(255,255,255,0.4)",
               }]}
               activeOpacity={0.8}
             >
-              <Feather name="bookmark" size={14} color={isFav ? colors.primary : colors.mutedForeground} />
-              <Text style={[styles.favBtnText, { color: isFav ? colors.primary : colors.mutedForeground }]}>
+              <Feather name="bookmark" size={14} color={isFav ? colors.primary : "rgba(255,255,255,0.85)"} />
+              <Text style={[styles.favBtnText, { color: isFav ? colors.primary : "rgba(255,255,255,0.85)" }]}>
                 {isFav ? "Saved" : "My List"}
               </Text>
             </TouchableOpacity>
-          </View>
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); }}
+              style={[styles.favBtn, { backgroundColor: "transparent", borderColor: "rgba(255,255,255,0.4)" }]}
+              activeOpacity={0.8}
+            >
+              <Feather name="external-link" size={14} color="rgba(255,255,255,0.85)" />
+              <Text style={[styles.favBtnText, { color: "rgba(255,255,255,0.85)" }]}>External</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); }}
+              style={[styles.favBtn, { backgroundColor: "transparent", borderColor: "rgba(255,255,255,0.4)" }]}
+              activeOpacity={0.8}
+            >
+              <Feather name="youtube" size={14} color="rgba(255,255,255,0.85)" />
+              <Text style={[styles.favBtnText, { color: "rgba(255,255,255,0.85)" }]}>Trailer</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </View>
 
-      {seasons.length > 1 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={[styles.seasonTabs, { backgroundColor: colors.sidebar, borderBottomColor: colors.border }]}
-          contentContainerStyle={{ paddingHorizontal: 12, gap: 4 }}
-        >
-          {seasons.map((s) => {
-            const active = s === activeSeason;
-            return (
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+        {seasons.map((s) => {
+          const isActive = s === activeSeason;
+          const seasonEps = seasonMap[s] ?? [];
+          return (
+            <View key={s}>
               <TouchableOpacity
-                key={s}
                 onPress={() => { Haptics.selectionAsync(); setActiveSeason(s); }}
-                style={[
-                  styles.seasonTab,
-                  active ? { backgroundColor: colors.primary } : { backgroundColor: colors.secondary },
-                ]}
+                style={[styles.seasonRow, { borderBottomColor: colors.border }]}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.seasonTabText, { color: active ? "#fff" : colors.mutedForeground }]}>
+                <Feather
+                  name={isActive ? "chevron-down" : "chevron-right"}
+                  size={14}
+                  color={isActive ? colors.primary : colors.mutedForeground}
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={[styles.seasonRowLabel, { color: isActive ? colors.foreground : colors.mutedForeground, fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
                   Season {s}
                 </Text>
+                <Text style={[styles.seasonRowCount, { color: colors.mutedForeground }]}>
+                  {seasonEps.length} ep
+                </Text>
               </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
-
-      <FlatList
-        data={eps}
-        keyExtractor={(ep) => ep.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 20, paddingTop: 4 }}
-        renderItem={({ item: ep, index }) => {
-          const info = extractSeasonEp(ep.name);
-          const epNum = info?.ep ?? index + 1;
-          return (
-            <TouchableOpacity
-              onPress={() => { Haptics.selectionAsync(); onPlayEp(ep); }}
-              style={[styles.epRow, { borderBottomColor: colors.border }]}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.epNumBox, { backgroundColor: colors.secondary }]}>
-                <Text style={[styles.epNum, { color: colors.mutedForeground }]}>{epNum}</Text>
-              </View>
-              <View style={[styles.epThumb, { backgroundColor: colors.secondary }]}>
-                {ep.logo ? (
-                  <Image source={{ uri: ep.logo }} style={styles.epThumbImg} contentFit="cover" />
-                ) : (
-                  <Feather name="film" size={18} color={colors.mutedForeground} />
-                )}
-              </View>
-              <View style={styles.epInfo}>
-                <Text style={[styles.epTitle, { color: colors.foreground }]} numberOfLines={2}>{ep.name}</Text>
-              </View>
-              <View style={[styles.epPlayBtn, { backgroundColor: colors.primary }]}>
-                <Feather name="play" size={13} color="#fff" />
-              </View>
-            </TouchableOpacity>
+              {isActive && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}
+                >
+                  {seasonEps.map((ep, index) => {
+                    const info = extractSeasonEp(ep.name);
+                    const epNum = info?.ep ?? index + 1;
+                    return (
+                      <TouchableOpacity
+                        key={ep.id}
+                        onPress={() => { Haptics.selectionAsync(); onPlayEp(ep); }}
+                        style={styles.epCard}
+                        activeOpacity={0.8}
+                      >
+                        <View style={[styles.epCardThumb, { backgroundColor: colors.secondary }]}>
+                          {ep.logo ? (
+                            <Image source={{ uri: ep.logo }} style={styles.epCardThumbImg} contentFit="cover" />
+                          ) : (
+                            <Feather name="film" size={16} color={colors.mutedForeground} />
+                          )}
+                          <View style={[styles.epCardPlayOverlay, { backgroundColor: "rgba(0,0,0,0.35)" }]}>
+                            <Feather name="play" size={14} color="#fff" />
+                          </View>
+                        </View>
+                        <Text style={[styles.epCardNum, { color: colors.mutedForeground }]}>E{epNum}</Text>
+                        <Text style={[styles.epCardName, { color: colors.foreground }]} numberOfLines={2}>{ep.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
           );
-        }}
-      />
+        })}
+      </ScrollView>
     </View>
   );
 }
@@ -1076,6 +1115,55 @@ const styles = StyleSheet.create({
   seasonTabText: {
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
+  },
+  seasonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  seasonRowLabel: {
+    flex: 1,
+    fontSize: 13,
+  },
+  seasonRowCount: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    marginRight: 4,
+  },
+  epCard: {
+    width: 130,
+  },
+  epCardThumb: {
+    width: 130,
+    height: 76,
+    borderRadius: 5,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+    marginBottom: 5,
+    position: "relative",
+  },
+  epCardThumbImg: {
+    width: 130,
+    height: 76,
+  },
+  epCardPlayOverlay: {
+    position: "absolute",
+    inset: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  epCardNum: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 2,
+  },
+  epCardName: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 15,
   },
   epRow: {
     flexDirection: "row",
