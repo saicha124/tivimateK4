@@ -25,6 +25,7 @@ import { useIPTV } from "@/context/IPTVContext";
 import { usePiP } from "@/context/PiPContext";
 import { MultiviewScreen } from "@/components/MultiviewScreen";
 import { EpgOverlay } from "@/components/EpgOverlay";
+import { PlayerInfoBar } from "@/components/PlayerInfoBar";
 
 function fmtHHMM(ms: number) {
   const d = new Date(ms);
@@ -447,7 +448,7 @@ export default function PlayerScreen() {
     : url;
 
   const { startPiP } = usePiP();
-  const { activePlaylist, watchHistory, stalkerEpgData, resolveStalkerStreamUrl, addToWatchHistory } = useIPTV();
+  const { activePlaylist, watchHistory, stalkerEpgData, resolveStalkerStreamUrl, addToWatchHistory, clearWatchHistory } = useIPTV();
 
   const channelEpg = useMemo(() => {
     if (!channelId || !activePlaylist) return undefined;
@@ -575,6 +576,10 @@ export default function PlayerScreen() {
   const channelList = useMemo(() => activePlaylist?.channels ?? [], [activePlaylist]);
   const currentChannelIdx = useMemo(
     () => (channelId ? channelList.findIndex((c) => c.id === channelId) : -1),
+    [channelList, channelId]
+  );
+  const currentChannel = useMemo(
+    () => (channelId ? channelList.find((c) => c.id === channelId) : undefined),
     [channelList, channelId]
   );
 
@@ -896,9 +901,9 @@ export default function PlayerScreen() {
 
           {/* Bottom area */}
           <View>
-            {/* Stream / scrubber bar */}
-            <View style={[styles.bottomBar, { backgroundColor: "rgba(0,0,0,0.65)" }]}>
-              {isCatchUp && duration > 0 ? (
+            {/* Scrubber — catch-up and standalone VOD */}
+            {(isCatchUp || (!channelId && duration > 0)) && (
+              <View style={[styles.bottomBar, { backgroundColor: "rgba(0,0,0,0.65)" }]}>
                 <Scrubber
                   position={position}
                   duration={duration}
@@ -909,114 +914,41 @@ export default function PlayerScreen() {
                   }}
                   colors={colors}
                 />
-              ) : !channelId && duration > 0 ? (
-                <Scrubber
-                  position={position}
-                  duration={duration}
-                  onSeek={async (pct) => {
-                    if (videoRef.current && duration > 0) {
-                      await videoRef.current.setPositionAsync(pct * duration);
-                    }
-                  }}
-                  colors={colors}
-                />
-              ) : channelId ? (
-                <View style={styles.epgPanel}>
-                  <View style={styles.qualityRow}>
-                    <View style={[styles.qBadge, { backgroundColor: `${colors.primary}30` }]}>
-                      <Text style={[styles.qBadgeText, { color: colors.primary }]}>HD</Text>
-                    </View>
-                    <View style={[styles.qBadge, { backgroundColor: "rgba(255,255,255,0.12)" }]}>
-                      <Text style={[styles.qBadgeText, { color: "rgba(255,255,255,0.7)" }]}>30 FPS</Text>
-                    </View>
-                    <View style={[styles.qBadge, { backgroundColor: "rgba(255,255,255,0.12)" }]}>
-                      <Text style={[styles.qBadgeText, { color: "rgba(255,255,255,0.7)" }]}>STEREO</Text>
-                    </View>
-                    <View style={styles.liveDotRow}>
-                      <View style={[styles.liveDotSmall, { backgroundColor: "#f44336" }]} />
-                      <Text style={styles.liveBottomText}>LIVE</Text>
-                    </View>
-                  </View>
-                  {currentEpgProg ? (
-                    <>
-                      <Text style={styles.epgPanelTitle} numberOfLines={1}>{currentEpgProg.title}</Text>
-                      <View style={styles.epgTimeRow}>
-                        <Text style={styles.epgTimeText}>
-                          {fmtHHMM(currentEpgProg.startTime)} — {fmtHHMM(currentEpgProg.endTime)}
-                        </Text>
-                        <Text style={styles.epgMinsLeft}>
-                          {Math.max(0, Math.round((currentEpgProg.endTime - epgNow) / 60000))} min left
-                        </Text>
-                      </View>
-                      <View style={[styles.epgProgTrack, { backgroundColor: "rgba(255,255,255,0.18)" }]}>
-                        <View
-                          style={[styles.epgProgFill, { width: `${epgProgress * 100}%` as any, backgroundColor: colors.primary }]}
-                        />
-                      </View>
-                      {nextEpgProg && (
-                        <Text style={styles.epgNextText} numberOfLines={1}>
-                          NEXT: {nextEpgProg.title} · {fmtHHMM(nextEpgProg.startTime)}
-                        </Text>
-                      )}
-                    </>
-                  ) : null}
-                </View>
-              ) : (
-                <View style={styles.liveBottomRow}>
-                  <Feather name="radio" size={12} color={colors.primary} />
-                  <Text style={styles.streamInfo} numberOfLines={1}>{name}</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Channel history strip */}
-            {!isCatchUp && !!channelId && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={[styles.historyStrip, { backgroundColor: "rgba(0,0,0,0.82)" }]}
-                contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 6, gap: 8, alignItems: "center" }}
-              >
-                <TouchableOpacity
-                  onPress={() => { Haptics.selectionAsync(); setShowToolbar(false); setShowEpg(true); }}
-                  style={styles.histActionCard}
-                >
-                  <Feather name="grid" size={20} color="#fff" />
-                  <Text style={styles.histActionLabel}>TV guide</Text>
-                </TouchableOpacity>
-                <View style={styles.histSep} />
-                {watchHistory
-                  .filter((h) => h.type === "channel" || !h.type)
-                  .slice(0, 12)
-                  .map((h) => (
-                    <TouchableOpacity
-                      key={`${h.channelId}-${h.watchedAt}`}
-                      style={[
-                        styles.histChannelCard,
-                        h.channelId === channelId && { borderColor: colors.primary, borderWidth: 2 },
-                      ]}
-                      onPress={() => {
-                        if (h.channelId !== channelId) {
-                          Haptics.selectionAsync();
-                          router.replace({
-                            pathname: "/player",
-                            params: { url: h.channelUrl, name: h.channelName, channelId: h.channelId },
-                          });
-                        }
-                      }}
-                    >
-                      {h.channelLogo ? (
-                        <Image source={{ uri: h.channelLogo }} style={styles.histChannelLogo} contentFit="contain" />
-                      ) : (
-                        <Feather name="tv" size={14} color="rgba(255,255,255,0.6)" />
-                      )}
-                      <Text style={styles.histChannelName} numberOfLines={2}>{h.channelName}</Text>
-                    </TouchableOpacity>
-                  ))}
-              </ScrollView>
+              </View>
             )}
 
-            {/* Tivimate-style quick-action toolbar */}
+            {/* TiviMate-style info bar — live channels */}
+            {!!channelId && !isCatchUp && (
+              <PlayerInfoBar
+                channelName={name ?? "Unknown"}
+                channelLogo={currentChannel?.logo}
+                channelNumber={currentChannelIdx >= 0 ? currentChannelIdx + 1 : 0}
+                currentProgram={currentEpgProg}
+                nextProgram={nextEpgProg}
+                epgProgress={epgProgress}
+                watchHistory={watchHistory}
+                currentChannelId={channelId}
+                colors={colors}
+                bottomPad={bottomPad}
+                isCatchUp={false}
+                sleepSecondsLeft={sleepSecondsLeft}
+                onGuide={() => {
+                  setShowControls(false);
+                  setShowEpg(true);
+                }}
+                onSwitchChannel={(h) => {
+                  router.replace({
+                    pathname: "/player",
+                    params: { url: h.channelUrl, name: h.channelName, channelId: h.channelId },
+                  });
+                }}
+                onClearHistory={clearWatchHistory}
+                onMore={() => setShowToolbar((v) => !v)}
+                onSleepTimer={() => setShowSleepTimer(true)}
+              />
+            )}
+
+            {/* Quick-action toolbar */}
             {showToolbar && (
               <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
                 <PlayerToolbar
