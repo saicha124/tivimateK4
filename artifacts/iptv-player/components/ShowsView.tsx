@@ -85,11 +85,13 @@ function StalkerSeriesDetail({
   isFav,
   onPlayEpisode,
   onToggleFav,
+  onBack,
 }: {
   item: VODItem;
   isFav: boolean;
   onPlayEpisode: (url: string, name: string) => void;
   onToggleFav: () => void;
+  onBack?: () => void;
 }) {
   const colors = useColors();
   const { activePlaylist } = useIPTV();
@@ -199,6 +201,16 @@ function StalkerSeriesDetail({
           colors={["rgba(0,0,0,0.1)", "rgba(13,13,13,0.97)"]}
           style={StyleSheet.absoluteFillObject}
         />
+        {onBack && (
+          <TouchableOpacity
+            onPress={onBack}
+            style={styles.backBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.75}
+          >
+            <Feather name="arrow-left" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
 
         <View style={styles.bannerLayout}>
           {item.logo ? (
@@ -419,11 +431,13 @@ function M3USeriesDetail({
   isFav,
   onPlayEp,
   onToggleFav,
+  onBack,
 }: {
   series: SeriesGroup;
   isFav: boolean;
   onPlayEp: (ep: VODItem) => void;
   onToggleFav: () => void;
+  onBack?: () => void;
 }) {
   const colors = useColors();
   const seasonMap = useMemo(() => groupEpisodesBySeasons(series.episodes), [series]);
@@ -448,6 +462,16 @@ function M3USeriesDetail({
           colors={["rgba(0,0,0,0.25)", "rgba(17,17,17,0.98)"]}
           style={StyleSheet.absoluteFillObject}
         />
+        {onBack && (
+          <TouchableOpacity
+            onPress={onBack}
+            style={styles.backBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.75}
+          >
+            <Feather name="arrow-left" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
         <View style={styles.bannerContent}>
           <Text style={styles.bannerTitle} numberOfLines={2}>{series.name}</Text>
           <View style={styles.badgeRow}>
@@ -641,6 +665,7 @@ export function ShowsView({ onPlayVOD }: ShowsViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const inputRef = useRef<TextInput>(null);
+  const [fullScreenShow, setFullScreenShow] = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -685,6 +710,57 @@ export function ShowsView({ onPlayVOD }: ShowsViewProps) {
     return displaySeriesList.find((s) => s.name === selectedId) ?? displaySeriesList[0] ?? null;
   }, [isStalker, displaySeriesList, selectedId]);
 
+  if (fullScreenShow) {
+    if (isStalker && currentStalkerItem) {
+      return (
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <StalkerSeriesDetail
+            item={currentStalkerItem}
+            isFav={favorites.includes(currentStalkerItem.id)}
+            onBack={() => setFullScreenShow(false)}
+            onPlayEpisode={(url, epName) => {
+              addToWatchHistory({
+                channelId: currentStalkerItem.id,
+                channelName: epName,
+                channelGroup: currentStalkerItem.category,
+                channelLogo: currentStalkerItem.logo,
+                channelUrl: url,
+                type: "show",
+              });
+              onPlayVOD(url, epName);
+            }}
+            onToggleFav={() => toggleFavorite(currentStalkerItem.id)}
+          />
+        </View>
+      );
+    }
+    if (!isStalker && currentSeries) {
+      return (
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <M3USeriesDetail
+            series={currentSeries}
+            isFav={currentSeries.episodes[0] ? favorites.includes(currentSeries.episodes[0].id) : false}
+            onBack={() => setFullScreenShow(false)}
+            onPlayEp={(ep) => {
+              addToWatchHistory({
+                channelId: ep.id,
+                channelName: ep.name,
+                channelGroup: ep.category,
+                channelLogo: ep.logo,
+                channelUrl: ep.url,
+                type: "show",
+              });
+              onPlayVOD(ep.url, ep.name);
+            }}
+            onToggleFav={() => {
+              if (currentSeries.episodes[0]) toggleFavorite(currentSeries.episodes[0].id);
+            }}
+          />
+        </View>
+      );
+    }
+  }
+
   if (shows.length === 0) {
     return (
       <View style={[styles.empty, { backgroundColor: colors.background }]}>
@@ -713,6 +789,7 @@ export function ShowsView({ onPlayVOD }: ShowsViewProps) {
                   Haptics.selectionAsync();
                   setSelectedCat(cat);
                   setSelectedId(null);
+                  setFullScreenShow(false);
                 }}
                 style={[styles.catItem, active && { backgroundColor: colors.highlight }]}
                 activeOpacity={0.7}
@@ -817,7 +894,7 @@ export function ShowsView({ onPlayVOD }: ShowsViewProps) {
                         logo={item.logo}
                         badge={item.year ? item.year.slice(0, 4) : undefined}
                         selected={currentStalkerItem?.id === item.id}
-                        onPress={() => { Haptics.selectionAsync(); setSelectedId(item.id); }}
+                        onPress={() => { Haptics.selectionAsync(); setSelectedId(item.id); setFullScreenShow(true); }}
                       />
                     ))}
                   </ScrollView>
@@ -898,7 +975,7 @@ export function ShowsView({ onPlayVOD }: ShowsViewProps) {
                         logo={s.logo}
                         badge={`${s.episodes.length} ep`}
                         selected={currentSeries?.name === s.name}
-                        onPress={() => { Haptics.selectionAsync(); setSelectedId(s.name); }}
+                        onPress={() => { Haptics.selectionAsync(); setSelectedId(s.name); setFullScreenShow(true); }}
                       />
                     ))}
                   </ScrollView>
@@ -1296,6 +1373,19 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: "#ccc",
     fontFamily: "Inter_500Medium",
+  },
+  // ── back button (full-screen mode) ──
+  backBtn: {
+    position: "absolute",
+    top: 14,
+    left: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
   },
   // ── empty state ──
   empty: {

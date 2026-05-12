@@ -100,7 +100,17 @@ export function ChannelList({
     hiddenChannels,
     favoritesOnlyGroups,
     stalkerEpgData,
+    recordings,
   } = useIPTV();
+
+  const activeRecordingChannelIds = useMemo(() => {
+    const now = Date.now();
+    const ids = new Set<string>();
+    for (const r of recordings) {
+      if (r.startTime <= now && r.endTime > now) ids.add(r.channelId);
+    }
+    return ids;
+  }, [recordings]);
 
   const [contextChannel, setContextChannel] = useState<Channel | null>(null);
   const [catchUpChannel, setCatchUpChannel] = useState<Channel | null>(null);
@@ -222,6 +232,7 @@ export function ChannelList({
     const prog = progress(channel, stalkerEpg);
     const isFav = favorites.includes(channel.id);
     const isBlocked = blockedChannels.includes(channel.id);
+    const isRecording = activeRecordingChannelIds.has(channel.id);
     const epg = stalkerEpg?.length ? stalkerEpg : (channel.epg ?? []);
     const hasCatchUp = epg.some((p) => p.startTime < Date.now());
 
@@ -312,6 +323,9 @@ export function ChannelList({
             >
               {channel.name}
             </Text>
+            {isRecording && (
+              <View style={styles.recDot} />
+            )}
             {isBlocked && (
               <View style={[styles.badge, { backgroundColor: `${colors.destructive}20` }]}>
                 <Text style={[styles.badgeText, { color: colors.destructive }]}>BLOCKED</Text>
@@ -849,6 +863,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
+  },
+  recDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#ef4444",
+    marginLeft: 5,
+    flexShrink: 0,
   },
   liveDot: {
     width: 5,

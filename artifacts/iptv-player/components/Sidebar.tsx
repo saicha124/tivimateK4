@@ -24,7 +24,7 @@ const ITEMS: SidebarItem[] = [
   { section: "Movies", icon: "film", label: "Movies" },
   { section: "Shows", icon: "grid", label: "Shows" },
   { section: "Search", icon: "search", label: "Search" },
-  { section: "Recordings", icon: "video", label: "Recordings" },
+  { section: "Recordings", icon: "hard-drive", label: "Recordings" },
   { section: "My List", icon: "bookmark", label: "My List" },
 ];
 
