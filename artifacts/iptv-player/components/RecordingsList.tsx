@@ -4,6 +4,7 @@ import * as Haptics from "expo-haptics";
 import * as FileSystem from "expo-file-system/legacy";
 import React, { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Linking,
@@ -18,12 +19,14 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Recording, useIPTV } from "@/context/IPTVContext";
+import { useDeviceRecordingCtx } from "@/context/DeviceRecordingContext";
 import { useColors } from "@/hooks/useColors";
 import {
   useServerRecordings,
   formatBytes,
   formatElapsed,
 } from "@/hooks/useServerRecordings";
+import { useDeviceFiles, DeviceFile } from "@/hooks/useDeviceFiles";
 
 function getStatus(r: Recording, now: number): "recording" | "scheduled" | "completed" {
   if (r.endTime < now) return "completed";
@@ -362,11 +365,242 @@ function RecordingCard({
   );
 }
 
+// ─── Device file card ─────────────────────────────────────────────────────────
+
+function parseChannelFromFilename(name: string): string {
+  const withoutExt = name.replace(/\.[^.]+$/, "");
+  const withoutDate = withoutExt.replace(/^\d{4}-\d{2}-\d{2}_\d{6}_/, "");
+  return withoutDate.replace(/_/g, " ").trim() || withoutExt;
+}
+
+function formatFileDate(ts: number): string {
+  const d = new Date(ts);
+  const today = new Date();
+  if (d.toDateString() === today.toDateString()) {
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function DeviceFileCard({
+  file,
+  onPlay,
+  onDelete,
+}: {
+  file: DeviceFile;
+  onPlay: (path: string, name: string) => void;
+  onDelete: (file: DeviceFile) => void;
+}) {
+  const colors = useColors();
+  const channelName = parseChannelFromFilename(file.name);
+
+  return (
+    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: colors.primary }]}>
+      <View style={styles.cardTop}>
+        <View style={[styles.channelLogo, { backgroundColor: colors.secondary }]}>
+          <Feather name="film" size={20} color={colors.mutedForeground} />
+        </View>
+        <View style={styles.cardInfo}>
+          <Text style={[styles.programTitle, { color: colors.foreground }]} numberOfLines={2}>
+            {channelName}
+          </Text>
+          <View style={styles.metaRow}>
+            <Feather name="hard-drive" size={10} color={colors.mutedForeground} />
+            <Text style={[styles.dateText, { color: colors.mutedForeground }]}>
+              {formatBytes(file.size)}
+            </Text>
+            <Text style={[styles.dot, { color: colors.mutedForeground }]}>·</Text>
+            <Text style={[styles.dateText, { color: colors.mutedForeground }]}>
+              {formatFileDate(file.modifiedAt)}
+            </Text>
+          </View>
+          <Text style={[styles.dateText, { color: "rgba(255,255,255,0.3)", fontSize: 10 }]} numberOfLines={1}>
+            {file.name}
+          </Text>
+        </View>
+        <View style={styles.cardActions}>
+          {/* Play button */}
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}30` }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onPlay(file.path, channelName);
+            }}
+          >
+            <Feather name="play" size={14} color={colors.primary} />
+          </TouchableOpacity>
+          {/* Open with (Android) */}
+          {Platform.OS === "android" && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: "rgba(76,175,80,0.1)", borderColor: "rgba(76,175,80,0.3)" }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                Linking.openURL(`intent:${file.path}#Intent;action=android.intent.action.VIEW;type=video/*;end`).catch(() => {
+                  Linking.openURL(file.path).catch(() => {});
+                });
+              }}
+            >
+              <Feather name="external-link" size={14} color="#4CAF50" />
+            </TouchableOpacity>
+          )}
+          {/* Delete button */}
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: "rgba(244,67,54,0.1)", borderColor: "rgba(244,67,54,0.25)" }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onDelete(file);
+            }}
+          >
+            <Feather name="trash-2" size={14} color="#f44336" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── Device recordings list ───────────────────────────────────────────────────
+
+function DeviceRecordingsList({ onPlay }: { onPlay: (url: string, name: string) => void }) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { recordingSettings } = useIPTV();
+  const { isRecording } = useDeviceRecordingCtx();
+  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+
+  const { files, loading, error, refresh, effectiveFolder } = useDeviceFiles(
+    recordingSettings.deviceRecordingsFolder ?? ""
+  );
+
+  // Refresh when a recording just stopped
+  const [prevRecording, setPrevRecording] = useState(isRecording);
+  if (prevRecording !== isRecording) {
+    setPrevRecording(isRecording);
+    if (!isRecording) refresh();
+  }
+
+  const handleDelete = (file: DeviceFile) => {
+    Alert.alert(
+      "Delete recording?",
+      `Delete "${file.name}" from your device?\n(${formatBytes(file.size)})`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            try {
+              await FileSystem.deleteAsync(file.path, { idempotent: true });
+              refresh();
+            } catch (e: any) {
+              Alert.alert("Error", e?.message ?? "Could not delete file.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  if (Platform.OS === "web") {
+    return (
+      <View style={styles.empty}>
+        <View style={[styles.emptyIcon, { backgroundColor: colors.secondary }]}>
+          <Feather name="monitor" size={36} color={colors.mutedForeground} />
+        </View>
+        <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Not available on web</Text>
+        <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+          Device recordings are only available on Android and iOS.
+        </Text>
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.empty}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.emptyText, { color: colors.mutedForeground, marginTop: 12 }]}>
+          Scanning recordings folder…
+        </Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.empty}>
+        <View style={[styles.emptyIcon, { backgroundColor: colors.secondary }]}>
+          <Feather name="alert-circle" size={36} color="#f44336" />
+        </View>
+        <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Cannot read folder</Text>
+        <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{error}</Text>
+        <TouchableOpacity
+          onPress={refresh}
+          style={[{ backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 }]}
+        >
+          <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (files.length === 0) {
+    return (
+      <View style={styles.empty}>
+        <View style={[styles.emptyIcon, { backgroundColor: colors.secondary }]}>
+          <Feather name="smartphone" size={36} color={colors.mutedForeground} />
+        </View>
+        <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No device recordings yet</Text>
+        <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+          Tap ● in the player while watching a live channel to start recording directly to this device.
+          {"\n\n"}Saving to: {effectiveFolder}
+        </Text>
+        <TouchableOpacity
+          onPress={refresh}
+          style={[{ backgroundColor: colors.secondary, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 }]}
+        >
+          <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }}>Refresh</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <FlatList
+      data={files}
+      keyExtractor={(f) => f.path}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={[styles.list, { paddingBottom: bottomPad + 16 }]}
+      ListHeaderComponent={
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, paddingTop: 8, paddingBottom: 4 }}>
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }} numberOfLines={1}>
+            {effectiveFolder}
+          </Text>
+          <TouchableOpacity onPress={refresh} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Feather name="refresh-cw" size={14} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+      }
+      renderItem={({ item }) => (
+        <DeviceFileCard
+          file={item}
+          onPlay={(path, name) => onPlay(path, name)}
+          onDelete={handleDelete}
+        />
+      )}
+      ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+    />
+  );
+}
+
 // ─── Main list ────────────────────────────────────────────────────────────────
 
 type SectionItem =
   | { type: "header"; label: string; count: number }
   | { type: "recording"; recording: Recording };
+
+type RecordingsTab = "server" | "device";
 
 export function RecordingsList({ onPlay }: { onPlay: (url: string, name: string) => void }) {
   const colors = useColors();
@@ -374,6 +608,7 @@ export function RecordingsList({ onPlay }: { onPlay: (url: string, name: string)
   const { recordings, cancelRecording } = useIPTV();
   const [now] = useState(() => Date.now());
   const [pickerRecording, setPickerRecording] = useState<Recording | null>(null);
+  const [activeTab, setActiveTab] = useState<RecordingsTab>("server");
 
   const { statuses } = useServerRecordings(recordings);
 
@@ -439,22 +674,61 @@ export function RecordingsList({ onPlay }: { onPlay: (url: string, name: string)
     ? (statuses[pickerRecording.id]?.downloadUrl ?? null)
     : null;
 
+  const TabBar = (
+    <View style={[tabStyles.bar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      {(["server", "device"] as RecordingsTab[]).map((tab) => {
+        const active = activeTab === tab;
+        return (
+          <TouchableOpacity
+            key={tab}
+            onPress={() => { Haptics.selectionAsync(); setActiveTab(tab); }}
+            style={[tabStyles.tab, active && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+          >
+            <Feather
+              name={tab === "server" ? "server" : "smartphone"}
+              size={14}
+              color={active ? colors.primary : colors.mutedForeground}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[tabStyles.label, { color: active ? colors.primary : colors.mutedForeground }]}>
+              {tab === "server" ? "Server" : "Device"}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
+  if (activeTab === "device") {
+    return (
+      <View style={{ flex: 1 }}>
+        {TabBar}
+        <DeviceRecordingsList onPlay={onPlay} />
+      </View>
+    );
+  }
+
   if (recordings.length === 0) {
     return (
-      <View style={styles.empty}>
-        <View style={[styles.emptyIcon, { backgroundColor: colors.secondary }]}>
-          <Feather name="video" size={36} color={colors.mutedForeground} />
+      <View style={{ flex: 1 }}>
+        {TabBar}
+        <View style={styles.empty}>
+          <View style={[styles.emptyIcon, { backgroundColor: colors.secondary }]}>
+            <Feather name="video" size={36} color={colors.mutedForeground} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No server recordings yet</Text>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+            Long-press any channel or program and tap Record to schedule a server recording.{"\n\n"}
+            Switch to the Device tab to see recordings saved directly on this device.
+          </Text>
         </View>
-        <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No recordings yet</Text>
-        <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-          Long-press any channel or program and tap Record to schedule a recording.
-        </Text>
       </View>
     );
   }
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
+      {TabBar}
       <FlatList
         data={listData}
         keyExtractor={(item, i) =>
@@ -507,7 +781,7 @@ export function RecordingsList({ onPlay }: { onPlay: (url: string, name: string)
           onPlay(url, name);
         }}
       />
-    </>
+    </View>
   );
 }
 
@@ -672,4 +946,24 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 17, fontFamily: "Inter_700Bold", textAlign: "center" },
   emptyText: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+});
+
+const tabStyles = StyleSheet.create({
+  bar: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 11,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  label: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
 });
