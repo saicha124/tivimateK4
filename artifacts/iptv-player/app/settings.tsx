@@ -256,6 +256,10 @@ export default function SettingsScreen() {
   const [activeRecCount, setActiveRecCount] = useState(0);
   const [serverTotalMB, setServerTotalMB] = useState(0);
 
+  const [deviceFolderEditing, setDeviceFolderEditing] = useState(false);
+  const [deviceFolderDraft, setDeviceFolderDraft] = useState(recordingSettings.deviceRecordingsFolder ?? "");
+  const deviceFolderInputRef = useRef<any>(null);
+
   const [proxyUrlDraft, setProxyUrlDraft] = useState(customProxyUrl);
   const [proxyUrlEditing, setProxyUrlEditing] = useState(false);
   const proxyUrlInputRef = useRef<any>(null);
@@ -918,8 +922,131 @@ export default function SettingsScreen() {
       setFolderEditing(false);
     };
 
+    const saveDeviceFolderDraft = () => {
+      const trimmed = deviceFolderDraft.trim();
+      setDeviceFolderDraft(trimmed);
+      updateRecordingSettings({ deviceRecordingsFolder: trimmed });
+      setDeviceFolderEditing(false);
+    };
+
+    const deviceFolderPresets = [
+      { label: "App Documents / recordings", value: "" },
+      { label: "Movies / IPTV (Android)", value: "/storage/emulated/0/Movies/IPTV" },
+      { label: "Downloads / IPTV (Android)", value: "/storage/emulated/0/Download/IPTV" },
+    ];
+
+    const effectiveDeviceFolder = recordingSettings.deviceRecordingsFolder?.trim()
+      ? recordingSettings.deviceRecordingsFolder.trim()
+      : "App Documents / recordings (default)";
+
     return (
       <ScrollView contentContainerStyle={{ paddingBottom: bottomPad + 24 }}>
+
+        {/* Device recording card */}
+        <View style={[styles.card, { marginTop: 12 }]}>
+          <View style={[rowStyles.row, { borderBottomColor: "rgba(255,255,255,0.06)", borderBottomWidth: StyleSheet.hairlineWidth }]}>
+            <Feather name="smartphone" size={16} color="rgba(255,255,255,0.45)" style={{ marginRight: 4 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontFamily: "Inter_400Regular", color: "#fff" }}>Device recording</Text>
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2, fontFamily: "Inter_400Regular" }}>
+                Tap the ● button in the player to record live stream directly to your device
+              </Text>
+            </View>
+          </View>
+          <View style={rowStyles.row}>
+            <Feather name="folder" size={16} color="rgba(255,255,255,0.45)" style={{ marginRight: 4 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontFamily: "Inter_400Regular", color: "#fff" }}>Save folder</Text>
+              {deviceFolderEditing ? (
+                <TextInput
+                  ref={deviceFolderInputRef}
+                  value={deviceFolderDraft}
+                  onChangeText={setDeviceFolderDraft}
+                  onSubmitEditing={saveDeviceFolderDraft}
+                  onBlur={saveDeviceFolderDraft}
+                  autoFocus
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="Leave empty for App Documents"
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  style={{
+                    fontSize: 12,
+                    fontFamily: "Inter_400Regular",
+                    color: colors.primary,
+                    marginTop: 4,
+                    paddingVertical: 0,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.primary,
+                  }}
+                />
+              ) : (
+                <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2, fontFamily: "Inter_400Regular" }}>
+                  {effectiveDeviceFolder}
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                if (deviceFolderEditing) {
+                  saveDeviceFolderDraft();
+                } else {
+                  setDeviceFolderDraft(recordingSettings.deviceRecordingsFolder ?? "");
+                  setDeviceFolderEditing(true);
+                }
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Feather
+                name={deviceFolderEditing ? "check" : "edit-2"}
+                size={16}
+                color={deviceFolderEditing ? colors.primary : "rgba(255,255,255,0.4)"}
+              />
+            </TouchableOpacity>
+          </View>
+          {/* Preset paths */}
+          {!deviceFolderEditing && (
+            <View style={{ paddingTop: 8, paddingBottom: 4 }}>
+              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontFamily: "Inter_400Regular", marginBottom: 6 }}>
+                QUICK PRESETS
+              </Text>
+              {deviceFolderPresets.map((p) => (
+                <TouchableOpacity
+                  key={p.value}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setDeviceFolderDraft(p.value);
+                    updateRecordingSettings({ deviceRecordingsFolder: p.value });
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 6,
+                  }}
+                >
+                  <View style={{
+                    width: 16, height: 16, borderRadius: 8, borderWidth: 1.5,
+                    borderColor: (recordingSettings.deviceRecordingsFolder ?? "") === p.value ? colors.primary : "rgba(255,255,255,0.3)",
+                    backgroundColor: (recordingSettings.deviceRecordingsFolder ?? "") === p.value ? colors.primary : "transparent",
+                    marginRight: 10,
+                    alignItems: "center", justifyContent: "center",
+                  }}>
+                    {(recordingSettings.deviceRecordingsFolder ?? "") === p.value && (
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" }} />
+                    )}
+                  </View>
+                  <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.75)", flex: 1 }}>
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <Text style={[styles.footerNote, { color: "rgba(255,255,255,0.35)", marginBottom: 12 }]}>
+          Device recording saves the live stream directly to this folder as a .ts file while you watch. Tap ● in the player to start, tap again or tap the REC badge to stop.
+        </Text>
+
         {/* Server status card */}
         <View style={[styles.card, { marginTop: 12 }]}>
           <View style={[rowStyles.row, { borderBottomColor: "rgba(255,255,255,0.06)", borderBottomWidth: StyleSheet.hairlineWidth }]}>

@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   BackHandler,
   Modal,
   Platform,
@@ -23,6 +24,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useIPTV } from "@/context/IPTVContext";
 import { usePiP } from "@/context/PiPContext";
+import { useDeviceRecording, formatBytes, formatElapsed } from "@/hooks/useDeviceRecording";
 import { MultiviewScreen } from "@/components/MultiviewScreen";
 import { EpgOverlay } from "@/components/EpgOverlay";
 import { PlayerInfoBar } from "@/components/PlayerInfoBar";
@@ -448,7 +450,9 @@ export default function PlayerScreen() {
     : url;
 
   const { startPiP } = usePiP();
-  const { activePlaylist, watchHistory, stalkerEpgData, resolveStalkerStreamUrl, addToWatchHistory, clearWatchHistory } = useIPTV();
+  const { activePlaylist, watchHistory, stalkerEpgData, resolveStalkerStreamUrl, addToWatchHistory, clearWatchHistory, recordingSettings } = useIPTV();
+
+  const deviceRecording = useDeviceRecording();
 
   const channelEpg = useMemo(() => {
     if (!channelId || !activePlaylist) return undefined;
@@ -882,11 +886,63 @@ export default function PlayerScreen() {
                 </Text>
               </TouchableOpacity>
             )}
-            {!isCatchUp && sleepSecondsLeft === null && !!channelId && (
+            {!isCatchUp && sleepSecondsLeft === null && !!channelId && !deviceRecording.isRecording && (
               <View style={styles.liveBadge}>
                 <View style={styles.liveDot} />
                 <Text style={styles.liveText}>LIVE</Text>
               </View>
+            )}
+            {/* Device REC badge — shown when recording to device */}
+            {deviceRecording.isRecording && (
+              <TouchableOpacity
+                onPress={async () => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  const saved = await deviceRecording.stop();
+                  Alert.alert(
+                    "Recording saved",
+                    saved
+                      ? `File saved to:\n${saved}\n\n${formatBytes(deviceRecording.bytesWritten)} captured`
+                      : "Recording stopped.",
+                    [{ text: "OK" }],
+                  );
+                }}
+                style={[styles.liveBadge, { backgroundColor: "rgba(229,57,53,0.25)", borderColor: "#e53935", borderWidth: 1 }]}
+              >
+                <View style={[styles.liveDot, { backgroundColor: "#e53935" }]} />
+                <Text style={[styles.liveText, { color: "#e53935" }]}>
+                  REC {formatElapsed(deviceRecording.elapsedMs)} · {formatBytes(deviceRecording.bytesWritten)}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {/* Record button — live channels only, not catch-up */}
+            {!isCatchUp && !!channelId && !!streamUrl && (
+              <TouchableOpacity
+                onPress={async () => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  if (deviceRecording.isRecording) {
+                    const saved = await deviceRecording.stop();
+                    Alert.alert(
+                      "Recording saved",
+                      saved
+                        ? `File saved to:\n${saved}\n\n${formatBytes(deviceRecording.bytesWritten)} captured`
+                        : "Recording stopped.",
+                      [{ text: "OK" }],
+                    );
+                  } else {
+                    const started = await deviceRecording.start(
+                      streamUrl,
+                      name ?? "recording",
+                      recordingSettings.deviceRecordingsFolder ?? "",
+                    );
+                    if (!started && deviceRecording.error) {
+                      Alert.alert("Cannot record", deviceRecording.error);
+                    }
+                  }
+                }}
+                style={[styles.iconBtn, deviceRecording.isRecording && { backgroundColor: "rgba(229,57,53,0.2)", borderRadius: 8 }]}
+              >
+                <Feather name="circle" size={20} color={deviceRecording.isRecording ? "#e53935" : "#fff"} />
+              </TouchableOpacity>
             )}
             {/* Toolbar toggle */}
             <TouchableOpacity

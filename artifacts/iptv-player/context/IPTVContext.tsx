@@ -79,12 +79,14 @@ export const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
 
 export interface RecordingSettings {
   recordingsFolder: string;
+  deviceRecordingsFolder: string;
   startBeforeMinutes: number;
   stopAfterMinutes: number;
 }
 
 export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
   recordingsFolder: "/storage/emulated/0/Download/TiviMate/Recordings",
+  deviceRecordingsFolder: "",
   startBeforeMinutes: 0,
   stopAfterMinutes: 0,
 };
