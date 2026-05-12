@@ -589,12 +589,17 @@ export default function PlayerScreen() {
             progressUpdateIntervalMillis={500}
             onPlaybackStatusUpdate={(s: any) => {
               setStatus(s);
-              if (s.isBuffering !== undefined) setIsBuffering(!!s.isBuffering);
+              if (s.isPlaying) {
+                setIsBuffering(false);
+              } else if (s.isBuffering !== undefined) {
+                setIsBuffering(!!s.isBuffering);
+              }
             }}
             onLoad={() => {
               setIsBuffering(false);
               hideControls();
             }}
+            onReadyForDisplay={() => setIsBuffering(false)}
           />
         ) : (
           <View style={styles.noUrl}>

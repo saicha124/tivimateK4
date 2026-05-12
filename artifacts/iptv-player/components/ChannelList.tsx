@@ -276,6 +276,7 @@ export function ChannelList({
         onPress={() => {
           Haptics.selectionAsync();
           setSelectedChannel(channel);
+          onPlayChannel(channel);
         }}
         onLongPress={() => handleLongPress(channel)}
         delayLongPress={300}
@@ -406,6 +407,7 @@ export function ChannelList({
         onPress={() => {
           Haptics.selectionAsync();
           setSelectedChannel(channel);
+          onPlayChannel(channel);
         }}
         onLongPress={() => handleLongPress(channel)}
         delayLongPress={300}

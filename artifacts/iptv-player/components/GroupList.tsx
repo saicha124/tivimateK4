@@ -291,7 +291,7 @@ export function GroupList({
                           style={[
                             styles.groupText,
                             {
-                              color: active ? colors.foreground : locked ? colors.mutedForeground : colors.secondaryForeground,
+                              color: active ? colors.primary : locked ? colors.mutedForeground : colors.secondaryForeground,
                               fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular",
                               flex: 1,
                               paddingLeft: 8,
@@ -347,7 +347,7 @@ export function GroupList({
                     style={[
                       styles.groupText,
                       {
-                        color: active ? colors.foreground : locked ? colors.mutedForeground : colors.secondaryForeground,
+                        color: active ? (isFavHeader ? "#fbbf24" : colors.primary) : locked ? colors.mutedForeground : colors.secondaryForeground,
                         fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular",
                         flex: 1,
                         paddingLeft: isFavHeader ? 0 : 6,

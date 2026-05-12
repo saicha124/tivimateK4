@@ -1,6 +1,5 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import React, { useMemo } from "react";
 import {
   Platform,
@@ -129,20 +128,15 @@ export function Sidebar({ onSettings, onSwitchPlaylist }: SidebarProps) {
                 setCurrentSection(item.section);
               }}
               activeOpacity={0.7}
-              style={styles.itemWrap}
+              style={[
+                styles.itemWrap,
+                active && { backgroundColor: `${colors.primary}22` },
+              ]}
             >
-              {active && (
-                <LinearGradient
-                  colors={["#3d8ef018", "#3d8ef008"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={StyleSheet.absoluteFill}
-                />
-              )}
               {active && (
                 <View style={[styles.activeStripe, { backgroundColor: colors.primary }]} />
               )}
-              <View style={[styles.iconWrap, active && { backgroundColor: `${colors.primary}18` }]}>
+              <View style={[styles.iconWrap, active && { backgroundColor: `${colors.primary}28` }]}>
                 <Feather
                   name={item.icon}
                   size={17}
@@ -158,7 +152,7 @@ export function Sidebar({ onSettings, onSwitchPlaylist }: SidebarProps) {
                 style={[
                   styles.itemLabel,
                   {
-                    color: active ? colors.foreground : colors.mutedForeground,
+                    color: active ? colors.primary : colors.mutedForeground,
                     fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular",
                   },
                 ]}
