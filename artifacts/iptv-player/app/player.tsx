@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   Modal,
   Platform,
   ScrollView,
@@ -446,7 +447,7 @@ export default function PlayerScreen() {
     : url;
 
   const { startPiP } = usePiP();
-  const { activePlaylist, watchHistory, stalkerEpgData } = useIPTV();
+  const { activePlaylist, watchHistory, stalkerEpgData, resolveStalkerStreamUrl, addToWatchHistory } = useIPTV();
 
   const channelEpg = useMemo(() => {
     if (!channelId || !activePlaylist) return undefined;
@@ -566,6 +567,160 @@ export default function PlayerScreen() {
     await videoRef.current.setPositionAsync(newPos);
   }, [position, duration, isCatchUp]);
 
+  // ── TV Remote / Channel Navigation ──────────────────────────────────────────
+
+  const [channelOsd, setChannelOsd] = useState<{ idx: number; name: string; logo?: string } | null>(null);
+  const channelOsdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const channelList = useMemo(() => activePlaylist?.channels ?? [], [activePlaylist]);
+  const currentChannelIdx = useMemo(
+    () => (channelId ? channelList.findIndex((c) => c.id === channelId) : -1),
+    [channelList, channelId]
+  );
+
+  const showOsd = useCallback((idx: number, name: string, logo?: string) => {
+    if (channelOsdTimer.current) clearTimeout(channelOsdTimer.current);
+    setChannelOsd({ idx, name, logo });
+    channelOsdTimer.current = setTimeout(() => setChannelOsd(null), 3000);
+  }, []);
+
+  const switchChannel = useCallback(
+    async (ch: { id: string; name: string; logo?: string; url: string; group: string }, idx: number) => {
+      showOsd(idx, ch.name, ch.logo);
+      let playUrl = ch.url;
+      if (activePlaylist?.type === "StalkerPortal" && ch.url.startsWith("stalker-")) {
+        try {
+          playUrl = await resolveStalkerStreamUrl(activePlaylist, ch.url);
+        } catch {
+          return;
+        }
+      }
+      addToWatchHistory({
+        channelId: ch.id,
+        channelName: ch.name,
+        channelGroup: ch.group,
+        channelLogo: ch.logo,
+        channelUrl: playUrl,
+      });
+      router.replace({ pathname: "/player", params: { url: playUrl, name: ch.name, channelId: ch.id } });
+    },
+    [activePlaylist, resolveStalkerStreamUrl, addToWatchHistory, showOsd, router]
+  );
+
+  const navigateChannel = useCallback(
+    (dir: "prev" | "next") => {
+      if (currentChannelIdx < 0 || channelList.length === 0) return;
+      const nextIdx =
+        dir === "prev"
+          ? (currentChannelIdx - 1 + channelList.length) % channelList.length
+          : (currentChannelIdx + 1) % channelList.length;
+      switchChannel(channelList[nextIdx], nextIdx);
+    },
+    [currentChannelIdx, channelList, switchChannel]
+  );
+
+  // Web keyboard handler — works in browser on Mi Box / Android TV
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const onKey = (e: KeyboardEvent) => {
+      switch (e.code) {
+        case "Space":
+        case "MediaPlayPause":
+          e.preventDefault();
+          togglePlay();
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          if (!isCatchUp) navigateChannel("prev");
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          if (!isCatchUp) navigateChannel("next");
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          if (isCatchUp) seekBackward();
+          else {
+            setShowControls(true);
+            hideControls();
+          }
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          if (isCatchUp) seekForward();
+          else {
+            setShowControls(true);
+            hideControls();
+          }
+          break;
+        case "Escape":
+        case "BrowserBack":
+          router.back();
+          break;
+        case "Enter":
+        case "NumpadEnter":
+          setShowControls((v) => !v);
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [togglePlay, navigateChannel, seekBackward, seekForward, isCatchUp, router, hideControls]);
+
+  // Android hardware back button (Mi Box remote Back key)
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      router.back();
+      return true;
+    });
+    return () => sub.remove();
+  }, [router]);
+
+  // Native TV remote events — Android TV (Mi Box) + Apple TV
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    let tvHandler: any = null;
+    try {
+      const RN = require("react-native");
+      if (RN.TVEventHandler) {
+        tvHandler = new RN.TVEventHandler();
+        tvHandler.enable(null, (_cmp: any, evt: any) => {
+          if (!evt) return;
+          switch (evt.eventType) {
+            case "playPause":
+              togglePlay();
+              break;
+            case "up":
+              if (!isCatchUp) navigateChannel("prev");
+              break;
+            case "down":
+              if (!isCatchUp) navigateChannel("next");
+              break;
+            case "left":
+              if (isCatchUp) seekBackward();
+              break;
+            case "right":
+              if (isCatchUp) seekForward();
+              break;
+            case "select":
+              setShowControls((v) => !v);
+              break;
+          }
+        });
+      }
+    } catch {
+      /* TVEventHandler not available on this platform */
+    }
+    return () => {
+      try {
+        tvHandler?.disable();
+      } catch {}
+    };
+  }, [togglePlay, navigateChannel, seekBackward, seekForward, isCatchUp]);
+
+  // ────────────────────────────────────────────────────────────────────────────
+
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -615,6 +770,36 @@ export default function PlayerScreen() {
               {isCatchUp ? "Loading catch-up..." : "Buffering..."}
             </Text>
           </View>
+        )}
+
+        {/* Channel OSD — shown when navigating with remote Up/Down */}
+        {channelOsd && (
+          <Animated.View
+            entering={FadeIn.duration(180)}
+            exiting={FadeOut.duration(500)}
+            style={styles.osdContainer}
+            pointerEvents="none"
+          >
+            {channelOsd.logo ? (
+              <Image source={{ uri: channelOsd.logo }} style={styles.osdLogo} contentFit="contain" />
+            ) : (
+              <View style={styles.osdLogoPlaceholder}>
+                <Feather name="tv" size={20} color="rgba(255,255,255,0.5)" />
+              </View>
+            )}
+            <View style={styles.osdInfo}>
+              <Text style={[styles.osdChNum, { color: colors.primary }]}>
+                CH {channelOsd.idx + 1}
+              </Text>
+              <Text style={styles.osdChName} numberOfLines={1}>
+                {channelOsd.name}
+              </Text>
+            </View>
+            <View style={styles.osdArrows}>
+              <Feather name="chevron-up" size={14} color="rgba(255,255,255,0.4)" />
+              <Feather name="chevron-down" size={14} color="rgba(255,255,255,0.4)" />
+            </View>
+          </Animated.View>
         )}
       </TouchableOpacity>
 
@@ -1180,6 +1365,57 @@ const styles = StyleSheet.create({
     width: 40,
     height: 28,
     borderRadius: 3,
+  },
+  osdContainer: {
+    position: "absolute",
+    bottom: 140,
+    left: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.88)",
+    borderRadius: 14,
+    padding: 12,
+    gap: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.15)",
+    maxWidth: 280,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  osdLogo: {
+    width: 56,
+    height: 38,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  osdLogoPlaceholder: {
+    width: 56,
+    height: 38,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  osdInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  osdChNum: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 1.5,
+  },
+  osdChName: {
+    color: "#fff",
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+  osdArrows: {
+    gap: 0,
+    alignItems: "center",
   },
   histChannelName: {
     color: "rgba(255,255,255,0.6)",
