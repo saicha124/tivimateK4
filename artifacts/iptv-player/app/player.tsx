@@ -24,7 +24,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useIPTV } from "@/context/IPTVContext";
 import { usePiP } from "@/context/PiPContext";
-import { useDeviceRecording, formatBytes, formatElapsed } from "@/hooks/useDeviceRecording";
+import { formatBytes, formatElapsed } from "@/hooks/useDeviceRecording";
+import { useDeviceRecordingCtx } from "@/context/DeviceRecordingContext";
 import { MultiviewScreen } from "@/components/MultiviewScreen";
 import { EpgOverlay } from "@/components/EpgOverlay";
 import { PlayerInfoBar } from "@/components/PlayerInfoBar";
@@ -452,7 +453,7 @@ export default function PlayerScreen() {
   const { startPiP } = usePiP();
   const { activePlaylist, watchHistory, stalkerEpgData, resolveStalkerStreamUrl, addToWatchHistory, clearWatchHistory, recordingSettings } = useIPTV();
 
-  const deviceRecording = useDeviceRecording();
+  const deviceRecording = useDeviceRecordingCtx();
 
   const channelEpg = useMemo(() => {
     if (!channelId || !activePlaylist) return undefined;

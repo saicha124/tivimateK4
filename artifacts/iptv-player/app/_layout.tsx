@@ -15,10 +15,12 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { FloatingPiPPlayer } from "@/components/FloatingPiPPlayer";
+import { FloatingRecordingIndicator } from "@/components/FloatingRecordingIndicator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { IPTVProvider } from "@/context/IPTVContext";
 import { ParentalProvider } from "@/context/ParentalContext";
 import { PiPProvider } from "@/context/PiPContext";
+import { DeviceRecordingProvider } from "@/context/DeviceRecordingContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -77,10 +79,13 @@ export default function RootLayout() {
             <KeyboardProvider>
               <ParentalProvider>
                 <IPTVProvider>
-                  <PiPProvider>
-                    <RootLayoutNav />
-                    <FloatingPiPPlayer />
-                  </PiPProvider>
+                  <DeviceRecordingProvider>
+                    <PiPProvider>
+                      <RootLayoutNav />
+                      <FloatingPiPPlayer />
+                      <FloatingRecordingIndicator />
+                    </PiPProvider>
+                  </DeviceRecordingProvider>
                 </IPTVProvider>
               </ParentalProvider>
             </KeyboardProvider>
