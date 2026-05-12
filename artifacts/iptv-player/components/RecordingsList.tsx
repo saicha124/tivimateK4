@@ -5,10 +5,13 @@ import React, { useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
+  Linking,
+  Modal,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -44,15 +47,151 @@ function formatDuration(start: number, end: number) {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+function sanitizeFilename(title: string): string {
+  return title.replace(/[/\\?%*:|"<>]/g, "_").slice(0, 80);
+}
+
+function buildFilePath(folder: string, programTitle: string, channelName: string, startTime: number): string {
+  const dt = new Date(startTime);
+  const date = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  const time = `${String(dt.getHours()).padStart(2, "0")}${String(dt.getMinutes()).padStart(2, "0")}`;
+  const base = sanitizeFilename(`${date}_${time}_${channelName}_${programTitle}`);
+  return `${folder}/${base}.ts`;
+}
+
+function openInExternalPlayer(url: string) {
+  if (Platform.OS === "android") {
+    const intentUrl = `intent:${url}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
+    Linking.openURL(intentUrl).catch(() => {
+      Linking.openURL(url).catch(() => {});
+    });
+  } else {
+    Linking.openURL(url).catch(() => {});
+  }
+}
+
+interface PlayPickerSheetProps {
+  recording: Recording | null;
+  filePath: string;
+  onClose: () => void;
+  onPlayInternal: (url: string, name: string) => void;
+}
+
+function PlayPickerSheet({ recording, filePath, onClose, onPlayInternal }: PlayPickerSheetProps) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+
+  if (!recording) return null;
+
+  const options: {
+    icon: React.ComponentProps<typeof Feather>["name"];
+    label: string;
+    sublabel: string;
+    accent?: string;
+    onPress: () => void;
+  }[] = [
+    {
+      icon: "play-circle",
+      label: "Play in app",
+      sublabel: "Open with the built-in player",
+      accent: colors.primary,
+      onPress: () => {
+        onClose();
+        onPlayInternal(recording.url, recording.programTitle);
+      },
+    },
+    {
+      icon: "external-link",
+      label: "Open in external player",
+      sublabel: Platform.OS === "android"
+        ? "MX Player, VLC, Kodi…"
+        : "Opens with default video handler",
+      accent: "#4CAF50",
+      onPress: () => {
+        onClose();
+        openInExternalPlayer(recording.url);
+      },
+    },
+  ];
+
+  return (
+    <Modal visible={!!recording} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={sheetStyles.overlay}>
+          <TouchableWithoutFeedback>
+            <View style={[sheetStyles.sheet, { backgroundColor: "#1e1e1e", paddingBottom: bottomPad + 16 }]}>
+              <View style={sheetStyles.handle} />
+
+              <View style={sheetStyles.recordingMeta}>
+                <View style={[sheetStyles.metaLogo, { backgroundColor: colors.secondary }]}>
+                  {recording.channelLogo ? (
+                    <Image source={{ uri: recording.channelLogo }} style={sheetStyles.metaLogoImg} contentFit="contain" />
+                  ) : (
+                    <Feather name="tv" size={16} color={colors.mutedForeground} />
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[sheetStyles.metaTitle, { color: "#fff" }]} numberOfLines={2}>
+                    {recording.programTitle}
+                  </Text>
+                  <Text style={[sheetStyles.metaChannel, { color: colors.primary }]} numberOfLines={1}>
+                    {recording.channelName}
+                  </Text>
+                  <Text style={[sheetStyles.metaTime, { color: "rgba(255,255,255,0.45)" }]}>
+                    {formatDate(recording.startTime)} · {formatTime(recording.startTime)}–{formatTime(recording.endTime)} · {formatDuration(recording.startTime, recording.endTime)}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[sheetStyles.divider, { backgroundColor: "rgba(255,255,255,0.08)" }]} />
+
+              {options.map((opt) => (
+                <TouchableOpacity
+                  key={opt.label}
+                  style={sheetStyles.optionRow}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); opt.onPress(); }}
+                  activeOpacity={0.75}
+                >
+                  <View style={[sheetStyles.optionIconWrap, { backgroundColor: `${opt.accent}18` }]}>
+                    <Feather name={opt.icon} size={22} color={opt.accent ?? "#fff"} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[sheetStyles.optionLabel, { color: "#fff" }]}>{opt.label}</Text>
+                    <Text style={[sheetStyles.optionSublabel, { color: "rgba(255,255,255,0.45)" }]}>{opt.sublabel}</Text>
+                  </View>
+                  <Feather name="chevron-right" size={16} color="rgba(255,255,255,0.25)" />
+                </TouchableOpacity>
+              ))}
+
+              <View style={[sheetStyles.filePathBox, { backgroundColor: "rgba(255,255,255,0.05)", borderColor: "rgba(255,255,255,0.08)" }]}>
+                <View style={sheetStyles.filePathHeader}>
+                  <Feather name="folder" size={12} color="rgba(255,255,255,0.35)" />
+                  <Text style={[sheetStyles.filePathLabel, { color: "rgba(255,255,255,0.35)" }]}>
+                    Recording file location
+                  </Text>
+                </View>
+                <Text style={[sheetStyles.filePathText, { color: "rgba(255,255,255,0.5)" }]} selectable>
+                  {filePath}
+                </Text>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+}
+
 function RecordingCard({
   recording,
   now,
-  onPlay,
+  onPlayPress,
   onCancel,
 }: {
   recording: Recording;
   now: number;
-  onPlay: (r: Recording) => void;
+  onPlayPress: (r: Recording) => void;
   onCancel: (r: Recording) => void;
 }) {
   const colors = useColors();
@@ -72,7 +211,7 @@ function RecordingCard({
     status === "scheduled" ? "Scheduled" :
     "Completed";
 
-  const statusIcon =
+  const statusIcon: React.ComponentProps<typeof Feather>["name"] =
     status === "recording" ? "circle" :
     status === "scheduled" ? "clock" :
     "check-circle";
@@ -127,11 +266,11 @@ function RecordingCard({
 
           {status === "completed" && (
             <TouchableOpacity
-              onPress={() => onPlay(recording)}
-              style={[styles.actionBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPlayPress(recording); }}
+              style={[styles.actionBtn, { backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}35` }]}
               activeOpacity={0.75}
             >
-              <Feather name="play" size={13} color={colors.foreground} />
+              <Feather name="play" size={13} color={colors.primary} />
             </TouchableOpacity>
           )}
 
@@ -175,8 +314,9 @@ type SectionItem =
 export function RecordingsList({ onPlay }: { onPlay: (url: string, name: string) => void }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { recordings, cancelRecording } = useIPTV();
+  const { recordings, cancelRecording, recordingSettings } = useIPTV();
   const [now] = useState(() => Date.now());
+  const [pickerRecording, setPickerRecording] = useState<Recording | null>(null);
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -236,10 +376,15 @@ export function RecordingsList({ onPlay }: { onPlay: (url: string, name: string)
     );
   };
 
-  const handlePlay = (r: Recording) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onPlay(r.url, r.programTitle);
-  };
+  const pickerFilePath = useMemo(() => {
+    if (!pickerRecording) return "";
+    return buildFilePath(
+      recordingSettings.recordingsFolder,
+      pickerRecording.programTitle,
+      pickerRecording.channelName,
+      pickerRecording.startTime,
+    );
+  }, [pickerRecording, recordingSettings.recordingsFolder]);
 
   if (recordings.length === 0) {
     return (
@@ -256,46 +401,164 @@ export function RecordingsList({ onPlay }: { onPlay: (url: string, name: string)
   }
 
   return (
-    <FlatList
-      data={listData}
-      keyExtractor={(item, i) =>
-        item.type === "header" ? `header-${item.label}` : `rec-${item.recording.id}-${i}`
-      }
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={[styles.list, { paddingBottom: bottomPad + 16 }]}
-      renderItem={({ item }) => {
-        if (item.type === "header") {
-          return (
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionDot, {
-                backgroundColor:
-                  item.label === "Now Recording" ? "#f44336" :
-                  item.label === "Scheduled" ? colors.primary :
-                  colors.mutedForeground,
-              }]} />
-              <Text style={[styles.sectionLabel, { color: colors.foreground }]}>
-                {item.label}
-              </Text>
-              <View style={[styles.sectionCount, { backgroundColor: colors.secondary }]}>
-                <Text style={[styles.sectionCountText, { color: colors.mutedForeground }]}>
-                  {item.count}
-                </Text>
-              </View>
-            </View>
-          );
+    <>
+      <FlatList
+        data={listData}
+        keyExtractor={(item, i) =>
+          item.type === "header" ? `header-${item.label}` : `rec-${item.recording.id}-${i}`
         }
-        return (
-          <RecordingCard
-            recording={item.recording}
-            now={now}
-            onPlay={handlePlay}
-            onCancel={handleCancel}
-          />
-        );
-      }}
-    />
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.list, { paddingBottom: bottomPad + 16 }]}
+        renderItem={({ item }) => {
+          if (item.type === "header") {
+            return (
+              <View style={styles.sectionHeader}>
+                <View style={[styles.sectionDot, {
+                  backgroundColor:
+                    item.label === "Now Recording" ? "#f44336" :
+                    item.label === "Scheduled" ? colors.primary :
+                    colors.mutedForeground,
+                }]} />
+                <Text style={[styles.sectionLabel, { color: colors.foreground }]}>
+                  {item.label}
+                </Text>
+                <View style={[styles.sectionCount, { backgroundColor: colors.secondary }]}>
+                  <Text style={[styles.sectionCountText, { color: colors.mutedForeground }]}>
+                    {item.count}
+                  </Text>
+                </View>
+              </View>
+            );
+          }
+          return (
+            <RecordingCard
+              recording={item.recording}
+              now={now}
+              onPlayPress={(r) => setPickerRecording(r)}
+              onCancel={handleCancel}
+            />
+          );
+        }}
+      />
+
+      <PlayPickerSheet
+        recording={pickerRecording}
+        filePath={pickerFilePath}
+        onClose={() => setPickerRecording(null)}
+        onPlayInternal={(url, name) => {
+          setPickerRecording(null);
+          onPlay(url, name);
+        }}
+      />
+    </>
   );
 }
+
+const sheetStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 10,
+    paddingHorizontal: 20,
+    gap: 0,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  recordingMeta: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
+  metaLogo: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  metaLogoImg: { width: 48, height: 48 },
+  metaTitle: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    lineHeight: 20,
+    marginBottom: 2,
+  },
+  metaChannel: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    marginBottom: 2,
+  },
+  metaTime: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginBottom: 8,
+  },
+  optionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.07)",
+  },
+  optionIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    flexShrink: 0,
+  },
+  optionLabel: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 2,
+  },
+  optionSublabel: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+  },
+  filePathBox: {
+    marginTop: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 12,
+    gap: 6,
+  },
+  filePathHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  filePathLabel: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  filePathText: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 16,
+  },
+});
 
 const styles = StyleSheet.create({
   list: {
