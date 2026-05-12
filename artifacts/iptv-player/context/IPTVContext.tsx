@@ -189,6 +189,8 @@ interface IPTVContextValue {
   loadStalkerEPG: (playlist: Playlist) => Promise<void>;
   isLoading: boolean;
   loadingMessage: string;
+  customProxyUrl: string;
+  setCustomProxyUrl: (url: string) => void;
 }
 
 const IPTVContext = createContext<IPTVContextValue | null>(null);
@@ -279,9 +281,23 @@ function stalkerMagHeaders(mac: string, token?: string): Record<string, string> 
   return h;
 }
 
-function getProxyBase(): string {
+// Module-level proxy base — updated from AsyncStorage on app load and from settings.
+// Using a module-level mutable means all callers (stalkerCall, addPlaylist, etc.)
+// automatically pick up the user's custom URL without needing context threading.
+let _proxyBaseOverride: string | null = null;
+
+export function setGlobalProxyBase(url: string | null) {
+  _proxyBaseOverride = url && url.trim() ? url.trim().replace(/\/+$/, "") : null;
+}
+
+export function getGlobalProxyBase(): string {
+  if (_proxyBaseOverride) return _proxyBaseOverride;
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   return domain ? `https://${domain}/api` : "/api";
+}
+
+function getProxyBase(): string {
+  return getGlobalProxyBase();
 }
 
 async function stalkerCall(
@@ -473,6 +489,7 @@ export function IPTVProvider({ children }: { children: React.ReactNode }) {
   const [recordingSettings, setRecordingSettings] = useState<RecordingSettings>(DEFAULT_RECORDING_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
+  const [customProxyUrl, setCustomProxyUrlState] = useState("");
   const [stalkerEpgData, setStalkerEpgData] = useState<Record<string, EPGProgram[]>>({});
   const [stalkerEpgLoading, setStalkerEpgLoading] = useState(false);
   const stalkerEpgPlaylistId = useRef<string | null>(null);
@@ -514,8 +531,20 @@ export function IPTVProvider({ children }: { children: React.ReactNode }) {
         if (remSettings) setReminderSettings({ ...DEFAULT_REMINDER_SETTINGS, ...JSON.parse(remSettings) });
         const recSettings = await AsyncStorage.getItem("recordingSettings");
         if (recSettings) setRecordingSettings({ ...DEFAULT_RECORDING_SETTINGS, ...JSON.parse(recSettings) });
+        const proxyUrl = await AsyncStorage.getItem("customProxyUrl");
+        if (proxyUrl) {
+          setCustomProxyUrlState(proxyUrl);
+          setGlobalProxyBase(proxyUrl);
+        }
       } catch {}
     })();
+  }, []);
+
+  const setCustomProxyUrl = useCallback((url: string) => {
+    const trimmed = url.trim();
+    setCustomProxyUrlState(trimmed);
+    setGlobalProxyBase(trimmed || null);
+    AsyncStorage.setItem("customProxyUrl", trimmed);
   }, []);
 
   const setActivePlaylist = useCallback((playlist: Playlist | null) => {
@@ -979,6 +1008,8 @@ export function IPTVProvider({ children }: { children: React.ReactNode }) {
         loadStalkerEPG,
         isLoading,
         loadingMessage,
+        customProxyUrl,
+        setCustomProxyUrl,
       }}
     >
       {children}

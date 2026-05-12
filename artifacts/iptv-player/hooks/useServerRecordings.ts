@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
-import { type Recording } from "@/context/IPTVContext";
+import { type Recording, getGlobalProxyBase } from "@/context/IPTVContext";
 
 export interface ServerRecordingStatus {
   id: string;
@@ -14,9 +14,9 @@ export interface ServerRecordingStatus {
   startAttempted: boolean;
 }
 
+// Uses the module-level proxy base from IPTVContext (updated via setGlobalProxyBase).
 function getApiBase(): string {
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  return domain ? `https://${domain}/api` : "/api";
+  return getGlobalProxyBase();
 }
 
 function formatBytes(bytes: number): string {

@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
+import * as FileSystem from "expo-file-system/legacy";
 import React, { useMemo, useState } from "react";
 import {
   Alert,
@@ -108,12 +109,38 @@ function PlayPickerSheet({ recording, downloadUrl, onClose, onPlayInternal }: Pl
     },
     ...(downloadUrl ? [{
       icon: "download" as const,
-      label: "Download recording file",
-      sublabel: "Save the .ts file to your device",
+      label: "Save to device",
+      sublabel: Platform.OS !== "web" ? "Download .ts file to device storage" : "Download recording from server",
       accent: "#2196F3",
       onPress: () => {
         onClose();
-        Linking.openURL(downloadUrl).catch(() => {});
+        if (Platform.OS === "web") {
+          Linking.openURL(downloadUrl).catch(() => {});
+          return;
+        }
+        const filename = `${recording.programTitle.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 50)}_${new Date(recording.startTime).toISOString().slice(0, 10)}.ts`;
+        const destPath = (FileSystem.documentDirectory ?? "") + filename;
+        Alert.alert(
+          "Save to Device",
+          `Download recording to:\n${destPath}`,
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Download",
+              onPress: async () => {
+                try {
+                  const dl = FileSystem.createDownloadResumable(downloadUrl, destPath, {});
+                  const result = await dl.downloadAsync();
+                  if (result?.uri) {
+                    Alert.alert("Saved", `Recording saved to device storage.\n\n${result.uri}`);
+                  }
+                } catch (e: any) {
+                  Alert.alert("Download failed", e?.message ?? "Could not download recording. Make sure the API Server URL is set correctly in Settings › General › Network.");
+                }
+              },
+            },
+          ]
+        );
       },
     }] : []),
   ];

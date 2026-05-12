@@ -488,7 +488,9 @@ export default function PlayerScreen() {
   const [status, setStatus] = useState<any>({});
   const [showControls, setShowControls] = useState(true);
   const [showToolbar, setShowToolbar] = useState(false);
-  const [isBuffering, setIsBuffering] = useState(true);
+  const [showBufferingOverlay, setShowBufferingOverlay] = useState(true);
+  const hasEverPlayed = useRef(false);
+  const bufferingDelayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showMultiview, setShowMultiview] = useState(false);
   const [showEpg, setShowEpg] = useState(false);
   const controlsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -750,16 +752,44 @@ export default function PlayerScreen() {
             onPlaybackStatusUpdate={(s: any) => {
               setStatus(s);
               if (s.isPlaying) {
-                setIsBuffering(false);
-              } else if (s.isBuffering !== undefined) {
-                setIsBuffering(!!s.isBuffering);
+                hasEverPlayed.current = true;
+                if (bufferingDelayTimer.current) {
+                  clearTimeout(bufferingDelayTimer.current);
+                  bufferingDelayTimer.current = null;
+                }
+                setShowBufferingOverlay(false);
+              } else if (s.isBuffering) {
+                if (!hasEverPlayed.current) {
+                  setShowBufferingOverlay(true);
+                } else if (!bufferingDelayTimer.current) {
+                  bufferingDelayTimer.current = setTimeout(() => {
+                    bufferingDelayTimer.current = null;
+                    setShowBufferingOverlay(true);
+                  }, 2000);
+                }
+              } else {
+                if (bufferingDelayTimer.current) {
+                  clearTimeout(bufferingDelayTimer.current);
+                  bufferingDelayTimer.current = null;
+                }
+                if (!s.isPlaying) setShowBufferingOverlay(false);
               }
             }}
             onLoad={() => {
-              setIsBuffering(false);
+              if (bufferingDelayTimer.current) {
+                clearTimeout(bufferingDelayTimer.current);
+                bufferingDelayTimer.current = null;
+              }
+              setShowBufferingOverlay(false);
               hideControls();
             }}
-            onReadyForDisplay={() => setIsBuffering(false)}
+            onReadyForDisplay={() => {
+              if (bufferingDelayTimer.current) {
+                clearTimeout(bufferingDelayTimer.current);
+                bufferingDelayTimer.current = null;
+              }
+              setShowBufferingOverlay(false);
+            }}
           />
         ) : (
           <View style={styles.noUrl}>
@@ -768,11 +798,14 @@ export default function PlayerScreen() {
           </View>
         )}
 
-        {isBuffering && (
-          <View style={styles.bufferingOverlay}>
+        {showBufferingOverlay && (
+          <View style={[
+            styles.bufferingOverlay,
+            { backgroundColor: hasEverPlayed.current ? "rgba(0,0,0,0.55)" : "#000" },
+          ]}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.bufferingText}>
-              {isCatchUp ? "Loading catch-up..." : "Buffering..."}
+              {isCatchUp ? "Loading catch-up..." : hasEverPlayed.current ? "Buffering..." : "Loading..."}
             </Text>
           </View>
         )}

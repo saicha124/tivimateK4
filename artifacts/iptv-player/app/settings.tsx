@@ -211,6 +211,8 @@ export default function SettingsScreen() {
     updateReminderSettings,
     recordingSettings,
     updateRecordingSettings,
+    customProxyUrl,
+    setCustomProxyUrl,
   } = useIPTV();
   const { isEnabled, hasPin, lockedGroups, enableControls, disableControls, changePin, verifyPin, lockAllSession } = useParental();
 
@@ -254,12 +256,21 @@ export default function SettingsScreen() {
   const [activeRecCount, setActiveRecCount] = useState(0);
   const [serverTotalMB, setServerTotalMB] = useState(0);
 
+  const [proxyUrlDraft, setProxyUrlDraft] = useState(customProxyUrl);
+  const [proxyUrlEditing, setProxyUrlEditing] = useState(false);
+  const proxyUrlInputRef = useRef<any>(null);
+
+  const getEffectiveApiBase = () => {
+    if (customProxyUrl.trim()) return customProxyUrl.trim().replace(/\/+$/, "");
+    const domain = process.env.EXPO_PUBLIC_DOMAIN;
+    return domain ? `https://${domain}/api` : "/api";
+  };
+
   useEffect(() => {
     if (page !== "recording") return;
     const fetchActive = async () => {
       try {
-        const domain = process.env.EXPO_PUBLIC_DOMAIN;
-        const base = domain ? `https://${domain}/api` : "/api";
+        const base = getEffectiveApiBase();
         const r = await fetch(`${base}/recordings/active`);
         if (!r.ok) return;
         const data: { id: string; channelName: string; filePath: string; startedAt: number; fileSize: number }[] = await r.json();
@@ -270,7 +281,7 @@ export default function SettingsScreen() {
     fetchActive();
     const t = setInterval(fetchActive, 5000);
     return () => clearInterval(t);
-  }, [page]);
+  }, [page, customProxyUrl]);
 
   const updateGeneral = (patch: Partial<typeof generalSettings>) =>
     setGeneralSettings((prev) => ({ ...prev, ...patch }));
@@ -445,6 +456,84 @@ export default function SettingsScreen() {
         <Divider />
         <SettingRow label="Restore data" onPress={() => Alert.alert("Restore", "Select a backup file to restore.")} last />
       </View>
+
+      {/* Server / Proxy URL */}
+      <View style={styles.accentHeader}>
+        <Text style={[styles.accentHeaderText, { color: colors.primary }]}>Network</Text>
+      </View>
+      <View style={styles.card}>
+        <View style={rowStyles.row}>
+          <Feather name="server" size={16} color="rgba(255,255,255,0.45)" style={{ marginRight: 8 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, fontFamily: "Inter_400Regular", color: "#fff" }}>
+              API Server URL
+            </Text>
+            {proxyUrlEditing ? (
+              <TextInput
+                ref={proxyUrlInputRef}
+                value={proxyUrlDraft}
+                onChangeText={setProxyUrlDraft}
+                onSubmitEditing={() => {
+                  setCustomProxyUrl(proxyUrlDraft);
+                  setProxyUrlEditing(false);
+                }}
+                onBlur={() => {
+                  setCustomProxyUrl(proxyUrlDraft);
+                  setProxyUrlEditing(false);
+                }}
+                autoFocus
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="e.g. https://your-domain.replit.app/api"
+                placeholderTextColor="rgba(255,255,255,0.25)"
+                style={{
+                  fontSize: 12,
+                  fontFamily: "Inter_400Regular",
+                  color: colors.primary,
+                  marginTop: 4,
+                  paddingVertical: 0,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.primary,
+                }}
+              />
+            ) : (
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2, fontFamily: "Inter_400Regular" }} numberOfLines={1}>
+                {customProxyUrl.trim() ? customProxyUrl.trim() : (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/api` : "Auto-detect")}
+              </Text>
+            )}
+          </View>
+          <TouchableOpacity
+            onPress={() => {
+              if (proxyUrlEditing) {
+                setCustomProxyUrl(proxyUrlDraft);
+                setProxyUrlEditing(false);
+              } else {
+                setProxyUrlDraft(customProxyUrl);
+                setProxyUrlEditing(true);
+              }
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Feather
+              name={proxyUrlEditing ? "check" : "edit-2"}
+              size={16}
+              color={proxyUrlEditing ? colors.primary : "rgba(255,255,255,0.4)"}
+            />
+          </TouchableOpacity>
+        </View>
+        {customProxyUrl.trim() ? (
+          <View style={[rowStyles.row, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.06)" }]}>
+            <View style={{ flex: 1 }}>
+              <TouchableOpacity onPress={() => { setCustomProxyUrl(""); setProxyUrlDraft(""); }}>
+                <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: "#f44336" }}>Clear custom URL</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+      </View>
+      <Text style={[styles.footerNote, { color: "rgba(255,255,255,0.35)" }]}>
+        Set this when using the app on a phone or Android TV outside of Replit. Enter the full URL of your API server (e.g. https://your-app.replit.app/api).
+      </Text>
     </ScrollView>
   );
 
@@ -921,7 +1010,7 @@ export default function SettingsScreen() {
         </View>
 
         <Text style={[styles.footerNote, { color: "rgba(255,255,255,0.35)", marginBottom: 4 }]}>
-          Files are stored on the server as .ts streams. Use the download option in Recordings to save them to your device.
+          Recordings are captured via FFmpeg on the API server. After a recording completes, open it in the Recordings tab and tap "Save to device" to download the .ts file to your phone or Android TV.{"\n"}For this to work on a phone or Android TV, make sure the API Server URL is set correctly in Settings › General › Network.
         </Text>
 
         {/* Padding card */}
