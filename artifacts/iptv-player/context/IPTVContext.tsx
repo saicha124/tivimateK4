@@ -249,9 +249,16 @@ async function fetchXtreamCodes(
 ): Promise<{ channels: Channel[]; movies: VODItem[]; shows: VODItem[] }> {
   const base = serverAddress.replace(/\/$/, "");
   const m3uUrl = `${base}/get.php?username=${username}&password=${password}&type=m3u_plus&output=ts`;
-  const response = await fetch(m3uUrl);
-  if (!response.ok) throw new Error("Failed to fetch Xtream Codes playlist");
-  const text = await response.text();
+  let text: string;
+  if (Platform.OS === "web") {
+    const resp = await fetch(`${getProxyBase()}/m3u/proxy?url=${encodeURIComponent(m3uUrl)}`);
+    if (!resp.ok) throw new Error(`Failed to fetch Xtream Codes playlist (${resp.status})`);
+    text = await resp.text();
+  } else {
+    const response = await fetch(m3uUrl);
+    if (!response.ok) throw new Error("Failed to fetch Xtream Codes playlist");
+    text = await response.text();
+  }
   return parseM3U(text);
 }
 
@@ -272,8 +279,12 @@ function stalkerMagHeaders(mac: string, token?: string): Record<string, string> 
   return h;
 }
 
+function getProxyBase(): string {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  return domain ? `https://${domain}/api` : "/api";
+}
+
 async function stalkerCall(
-  _proxyBase: string,
   portal: string,
   mac: string,
   token: string | undefined,
@@ -299,11 +310,7 @@ async function stalkerCall(
 
   // On web, CORS blocks direct portal calls — route through the Express proxy.
   const qs = new URLSearchParams({ portal, mac, ...(token ? { token } : {}), ...params });
-  const proxyBase = _proxyBase || (() => {
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    return domain ? `https://${domain}/api` : "/api";
-  })();
-  const resp = await fetch(`${proxyBase}/stalker/proxy?${qs}`);
+  const resp = await fetch(`${getProxyBase()}/stalker/proxy?${qs}`);
   if (!resp.ok) throw new Error(`Stalker proxy error: ${resp.status}`);
   return resp.json();
 }
@@ -313,15 +320,14 @@ async function fetchStalkerPortal(
   mac: string,
   onProgress: (msg: string) => void
 ): Promise<{ channels: Channel[]; movies: VODItem[]; shows: VODItem[]; token: string }> {
-  const proxyBase = "";
   const BATCH = 15;
 
   onProgress("Authenticating with portal...");
-  const hsData = await stalkerCall(proxyBase, portal, mac, undefined, { type: "stb", action: "handshake" });
+  const hsData = await stalkerCall(portal, mac, undefined, { type: "stb", action: "handshake" });
   const token: string = hsData?.js?.token;
   if (!token) throw new Error("Handshake failed — could not get token from portal");
 
-  const call = (params: Record<string, string>) => stalkerCall(proxyBase, portal, mac, token, params);
+  const call = (params: Record<string, string>) => stalkerCall(portal, mac, token, params);
 
   onProgress("Fetching channel categories...");
   const genresData = await call({ type: "itv", action: "get_genres" });
@@ -676,11 +682,9 @@ export function IPTVProvider({ children }: { children: React.ReactNode }) {
       throw new Error("Invalid Stalker playlist configuration");
     }
 
-    const proxyBase = "";
-
     let token = playlist.stalkerToken;
     if (!token) {
-      const hsData = await stalkerCall(proxyBase, playlist.serverAddress, playlist.macAddress, undefined, {
+      const hsData = await stalkerCall(playlist.serverAddress, playlist.macAddress, undefined, {
         type: "stb",
         action: "handshake",
       });
@@ -694,7 +698,7 @@ export function IPTVProvider({ children }: { children: React.ReactNode }) {
     }
 
     const call = (params: Record<string, string>) =>
-      stalkerCall(proxyBase, playlist.serverAddress!, playlist.macAddress!, token, params);
+      stalkerCall(playlist.serverAddress!, playlist.macAddress!, token, params);
 
     if (stalkerUrl.startsWith("stalker-cmd:")) {
       const cmd = stalkerUrl.replace("stalker-cmd:", "");
@@ -780,11 +784,9 @@ export function IPTVProvider({ children }: { children: React.ReactNode }) {
     setStalkerEpgLoading(true);
 
     try {
-      const proxyBase = "";
-
       let token = playlist.stalkerToken;
       if (!token) {
-        const hsData = await stalkerCall(proxyBase, playlist.serverAddress, playlist.macAddress, undefined, {
+        const hsData = await stalkerCall(playlist.serverAddress, playlist.macAddress, undefined, {
           type: "stb",
           action: "handshake",
         });
@@ -793,7 +795,7 @@ export function IPTVProvider({ children }: { children: React.ReactNode }) {
       }
 
       const call = (params: Record<string, string>) =>
-        stalkerCall(proxyBase, playlist.serverAddress!, playlist.macAddress!, token, params);
+        stalkerCall(playlist.serverAddress!, playlist.macAddress!, token, params);
 
       // Fetch EPG for all 6 day offsets: [-2,-1, today, +1, +2, +3]
       // Stalker period: 1=today, 2=tomorrow, -1=yesterday, etc.
@@ -854,11 +856,18 @@ export function IPTVProvider({ children }: { children: React.ReactNode }) {
 
         if (data.type === "M3U") {
           setLoadingMessage("Fetching playlist...");
-          const response = await fetch(data.url!);
-          if (!response.ok) throw new Error("Failed to fetch M3U");
-          const text = await response.text();
+          let m3uText: string;
+          if (Platform.OS === "web") {
+            const resp = await fetch(`${getProxyBase()}/m3u/proxy?url=${encodeURIComponent(data.url!)}`);
+            if (!resp.ok) throw new Error(`Failed to fetch M3U playlist (${resp.status})`);
+            m3uText = await resp.text();
+          } else {
+            const response = await fetch(data.url!);
+            if (!response.ok) throw new Error("Failed to fetch M3U");
+            m3uText = await response.text();
+          }
           setLoadingMessage("Processing channels...");
-          const parsed = parseM3U(text);
+          const parsed = parseM3U(m3uText);
           channels = parsed.channels;
           movies = parsed.movies;
           shows = parsed.shows;
